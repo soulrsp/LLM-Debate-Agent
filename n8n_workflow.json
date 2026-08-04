@@ -1,0 +1,227 @@
+{
+  "name": "Multi-LLM Collaborative Fact-Checking & Hallucination Minimization",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "topic",
+              "value": "초전도체 LK-99 검증 결과와 학계의 교차 검증 결론은 무엇인가?"
+            },
+            {
+              "name": "debateHistory",
+              "value": ""
+            }
+          ],
+          "number": [
+            {
+              "name": "maxRounds",
+              "value": 3
+            },
+            {
+              "name": "currentRound",
+              "value": 1
+            }
+          ]
+        }
+      },
+      "id": "node-set-config",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $node[\"Set Config\"].json[\"geminiApiKey\"] }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"당신은 팩트 탐색기 AI입니다. 질문: {{ $json.topic }}\\n\\n이전 공유 데이터:\\n{{ $json.debateHistory }}\\n\\n환각을 배제하고 객관적으로 확인된 팩트와 수치 데이터를 정리해 주세요.\"\n    }]\n  }]\n}"
+      },
+      "id": "node-gemini",
+      "name": "Gemini API (Fact Finder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $node[\"Set Config\"].json[\"anthropicApiKey\"] }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-sonnet-20241022\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"당신은 교차 감정관 AI입니다. 주제: {{ $json.topic }}\\n\\n이전 발언 내용:\\n{{ $json.debateHistory }}\\n\\n위 내용 중 환각(Hallucination), 비약, 오차가 있는지 검증하고 교정하세요.\"\n    }\n  ]\n}"
+      },
+      "id": "node-claude",
+      "name": "Claude API (Cross Auditor)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [700, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $node[\"Set Config\"].json[\"openaiApiKey\"] }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"당신은 지식 합성 AI입니다.\"},\n    {\"role\": \"user\", \"content\": \"주제: {{ $json.topic }}\\n\\n공유 및 감정된 기록:\\n{{ $json.debateHistory }}\\n\\n상충 지점을 해소하고 부족한 맥락을 보완하세요.\"}\n  ]\n}"
+      },
+      "id": "node-openai",
+      "name": "OpenAI API (Synthesizer)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [700, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const round = $input.first().json.currentRound;\nconst geminiText = $('Gemini API (Fact Finder)').first().json.candidates[0].content.parts[0].text;\nconst claudeText = $('Claude API (Cross Auditor)').first().json.content[0].text;\nconst gptText = $('OpenAI API (Synthesizer)').first().json.choices[0].message.content;\n\nconst newHistory = $input.first().json.debateHistory + `\\n[Round ${round}]\\nGemini(팩트 탐색): ${geminiText}\\nClaude(교차 감정): ${claudeText}\\nGPT(지식 합성): ${gptText}\\n`;\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    debateHistory: newHistory,\n    currentRound: round + 1\n  }\n}];"
+      },
+      "id": "node-aggregate",
+      "name": "Fact Accumulator (JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [960, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $node[\"Set Config\"].json[\"openaiApiKey\"] }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"당신은 최종 교차검증 통합관 AI입니다.\"},\n    {\"role\": \"user\", \"content\": \"3개 LLM의 교차 검증 전문:\\n{{ $json.debateHistory }}\\n\\n[100% 확정 팩트], [식별/교정된 환각 오정보], [최종 팩트체크 결론]을 명확히 작성하세요.\"}\n  ]\n}"
+      },
+      "id": "node-referee",
+      "name": "Consensus Verifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1200, 360]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Gemini API (Fact Finder)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Claude API (Cross Auditor)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OpenAI API (Synthesizer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini API (Fact Finder)": {
+      "main": [
+        [
+          {
+            "node": "Fact Accumulator (JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude API (Cross Auditor)": {
+      "main": [
+        [
+          {
+            "node": "Fact Accumulator (JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI API (Synthesizer)": {
+      "main": [
+        [
+          {
+            "node": "Fact Accumulator (JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fact Accumulator (JS)": {
+      "main": [
+        [
+          {
+            "node": "Consensus Verifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
