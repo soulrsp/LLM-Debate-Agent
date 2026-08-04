@@ -712,8 +712,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Crash-proof Render turn card
-  function renderTurnCard(round, modelName, roleLabel, stanceClass, text) {
+  // Crash-proof Render turn card with Reference Footnotes & Source Badges
+  function formatTextWithReferences(text) {
+    if (!text) return '';
+    let escaped = escapeHtml(text);
+    escaped = escaped.replace(/\[(출처|참고|근거):?\s*([^\]]+)\]/g, '<span class="ref-tag">📌 [$1: $2]</span>');
+    return escaped.replace(/\n/g, '<br>');
+  }
+
+  function renderTurnCard(round, modelName, roleLabel, stanceClass, text, attachedFilesList = []) {
     const safeModelName = String(modelName || 'AI Model');
     const safeRoleLabel = String(roleLabel || '교차 검증');
     const safeStanceClass = String(stanceClass || 'factfinder');
@@ -729,6 +736,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const keyIcon = Object.keys(icons).find(k => safeModelName.includes(k)) || '🤖';
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    let sourceBadgesHtml = '';
+    const filesToUse = (attachedFilesList && attachedFilesList.length > 0) ? attachedFilesList : attachedFiles;
+    if (filesToUse && filesToUse.length > 0) {
+      sourceBadgesHtml = '<div class="reference-source-container">';
+      filesToUse.forEach(f => {
+        const ext = (f.filename.split('.').pop() || '').toLowerCase();
+        let icon = '📄';
+        if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) icon = '🖼️';
+        else if (ext === 'pdf') icon = '📕';
+        else if (ext === 'docx') icon = '📘';
+        sourceBadgesHtml += `<span class="reference-source-badge">${icon} ${escapeHtml(f.filename)}</span>`;
+      });
+      sourceBadgesHtml += '</div>';
+    }
+
     card.innerHTML = `
       <div class="turn-header">
         <div class="speaker-info">
@@ -740,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="turn-time">${now}</div>
       </div>
-      <div class="turn-body">${escapeHtml(safeText)}</div>
+      <div class="turn-body">${formatTextWithReferences(safeText)}${sourceBadgesHtml}</div>
     `;
 
     if (debateStream) {
@@ -790,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
       openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
       groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
       nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
-      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
+      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'openrouter/free' }
     }[providerKey];
 
     if (!config) throw new Error(`Unknown provider: ${providerKey}`);
@@ -865,7 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (providerKey === 'nvidia') {
         modelsToTry = [config.model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
       } else if (providerKey === 'openrouter') {
-        modelsToTry = [config.model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
+        modelsToTry = ['openrouter/free', 'openai/gpt-oss-20b:free', 'qwen/qwen-2.5-72b-instruct:free', 'meta-llama/llama-3.1-8b-instruct:free', 'openrouter/auto'];
       }
 
       for (const m of modelsToTry) {
@@ -878,20 +900,24 @@ document.addEventListener('DOMContentLoaded', () => {
             headers['HTTP-Referer'] = window.location.href;
             headers['X-Title'] = 'LLM Fact-Check Arena';
           }
+          const requestBody = {
+            model: m,
+            max_tokens: 1200,
+            temperature: 0.6,
+            presence_penalty: 0.2,
+            frequency_penalty: 0.2,
+            messages: [
+              { role: 'system', content: cleanClientText(sysPrompt) },
+              { role: 'user', content: cleanClientText(userPrompt) }
+            ]
+          };
+          if (providerKey === 'openrouter') {
+            requestBody.reasoning = { enabled: true };
+          }
           const res = await fetch(`${config.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify({
-              model: m,
-              max_tokens: 1200,
-              temperature: 0.6,
-              presence_penalty: 0.2,
-              frequency_penalty: 0.2,
-              messages: [
-                { role: 'system', content: cleanClientText(sysPrompt) },
-                { role: 'user', content: cleanClientText(userPrompt) }
-              ]
-            })
+            body: JSON.stringify(requestBody)
           });
           if (res.ok) {
             const data = await res.json();
@@ -1104,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (statusText) statusText.textContent = '🎉 교차 검증 및 환각 최소화 팩트체크가 완료되었습니다!';
         if (btnExportDocxFull) btnExportDocxFull.disabled = false;
+        if (btnShareSession) btnShareSession.disabled = false;
       }
     } catch (err) {
       console.error('Error in startFactCheck:', err);
@@ -1185,19 +1212,127 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Stop pipeline
-  if (btnStop) {
-    btnStop.addEventListener('click', () => {
-      isDebating = false;
-      if (statusText) statusText.textContent = '⏹️ 사용자에 의해 교차 검증이 중단되었습니다.';
+  // Share Conversation via URL Link (?share=...) Feature
+  const btnShareSession = document.getElementById('btn-share-session');
+  const btnShareReport = document.getElementById('btn-share-report');
+  const sharedViewBanner = document.getElementById('shared-view-banner');
+  const sharedBannerDesc = document.getElementById('shared-banner-desc');
+  const btnResetSharedView = document.getElementById('btn-reset-shared-view');
+
+  function generateShareUrl() {
+    const topic = (topicInput?.value || '').trim();
+    if (!finalReportText && fullDebateLog.length === 0) return null;
+
+    const sharePayload = {
+      topic: topic || '공유된 교차 검증 주제',
+      date: new Date().toLocaleString('ko-KR'),
+      rounds: parseInt(roundsSelect.value, 10) || 1,
+      consensusReport: finalReportText,
+      debateHistory: debateHistory,
+      logs: fullDebateLog,
+      attachedFilesMeta: attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }))
+    };
+
+    try {
+      const jsonStr = JSON.stringify(sharePayload);
+      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
+      const baseUrl = window.location.origin + window.location.pathname;
+      return `${baseUrl}?share=${compressed}`;
+    } catch (e) {
+      console.error('Share URL generation error:', e);
+      return null;
+    }
+  }
+
+  function copyShareUrlToClipboard() {
+    const shareUrl = generateShareUrl();
+    if (!shareUrl) {
+      alert('공유할 교차 검증 대화록이 없습니다. 검증을 먼저 진행해 주세요!');
+      return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        alert('🔗 팩트체크 대화 공유 링크가 클립보드에 복사되었습니다! 🎉\n이 링크를 타인에게 전송하면 다른 사람도 동일한 결과를 즉시 확인할 수 있습니다.');
+      }).catch(() => {
+        prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+      });
+    } else {
+      prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+    }
+  }
+
+  if (btnShareSession) btnShareSession.addEventListener('click', copyShareUrlToClipboard);
+  if (btnShareReport) btnShareReport.addEventListener('click', copyShareUrlToClipboard);
+
+  if (btnResetSharedView) {
+    btnResetSharedView.addEventListener('click', () => {
+      window.history.pushState({}, document.title, window.location.pathname);
+      if (sharedViewBanner) sharedViewBanner.classList.add('hidden');
+      if (debateStream) debateStream.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔬</div>
+          <h3>Multi-LLM 팩트체크 아레나</h3>
+          <p>등록된 모든 LLM에 동시 요청하며,<br><b>에러 없이 성공한 응답만 필터링하여 실시간 교차 검증</b>을 진행합니다.</p>
+        </div>
+      `;
+      if (refereeCard) refereeCard.classList.add('hidden');
+      if (topicInput) topicInput.value = '';
     });
   }
 
-  // Start pipeline
-  if (btnStart) btnStart.addEventListener('click', startFactCheck);
+  function checkSharedUrlParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('share')) return;
+
+    const shareCode = urlParams.get('share');
+    try {
+      let jsonStr = '';
+      if (window.LZString) {
+        jsonStr = window.LZString.decompressFromEncodedURIComponent(shareCode);
+      }
+      if (!jsonStr) {
+        jsonStr = decodeURIComponent(atob(shareCode));
+      }
+      const data = JSON.parse(jsonStr);
+
+      if (data && data.topic) {
+        console.log('🔗 Loaded Shared Session:', data);
+        if (topicInput) topicInput.value = data.topic;
+        if (debateStream) debateStream.innerHTML = '';
+        if (sharedViewBanner) sharedViewBanner.classList.remove('hidden');
+        if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${data.topic}" | 생성일: ${data.date || '최근'}`;
+
+        if (data.logs && data.logs.length > 0) {
+          data.logs.forEach(turn => {
+            if (turn.round !== 'Consensus') {
+              const stanceClass = getStanceClass(turn.speaker);
+              renderTurnCard(turn.round, turn.speaker, turn.role, stanceClass, turn.text, data.attachedFilesMeta);
+            }
+          });
+        }
+
+        if (data.consensusReport) {
+          finalReportText = data.consensusReport;
+          fullDebateLog = data.logs || [];
+          if (refereeCard) refereeCard.classList.remove('hidden');
+          if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(data.consensusReport);
+        }
+
+        if (btnShareSession) btnShareSession.disabled = false;
+        if (btnExportDocxFull) btnExportDocxFull.disabled = false;
+      }
+    } catch (e) {
+      console.warn('Failed to parse share URL param:', e);
+    }
+  }
+
+  // Also enable btnShareSession on debate completion
+  const origFactCheck = startFactCheck;
 
   // Init
   loadApiKeys();
   loadEnabledModels();
   loadHistories();
+  checkSharedUrlParam();
 });
