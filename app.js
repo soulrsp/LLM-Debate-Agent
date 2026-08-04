@@ -812,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
       openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
       groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
       nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
-      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'openrouter/free' }
+      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
     }[providerKey];
 
     if (!config) throw new Error(`Unknown provider: ${providerKey}`);
@@ -887,7 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (providerKey === 'nvidia') {
         modelsToTry = [config.model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
       } else if (providerKey === 'openrouter') {
-        modelsToTry = ['openrouter/free', 'openai/gpt-oss-20b:free', 'qwen/qwen-2.5-72b-instruct:free', 'meta-llama/llama-3.1-8b-instruct:free', 'openrouter/auto'];
+        modelsToTry = [config.model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
       }
 
       for (const m of modelsToTry) {
@@ -900,24 +900,20 @@ document.addEventListener('DOMContentLoaded', () => {
             headers['HTTP-Referer'] = window.location.href;
             headers['X-Title'] = 'LLM Fact-Check Arena';
           }
-          const requestBody = {
-            model: m,
-            max_tokens: 1200,
-            temperature: 0.6,
-            presence_penalty: 0.2,
-            frequency_penalty: 0.2,
-            messages: [
-              { role: 'system', content: cleanClientText(sysPrompt) },
-              { role: 'user', content: cleanClientText(userPrompt) }
-            ]
-          };
-          if (providerKey === 'openrouter') {
-            requestBody.reasoning = { enabled: true };
-          }
           const res = await fetch(`${config.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+              model: m,
+              max_tokens: 1200,
+              temperature: 0.6,
+              presence_penalty: 0.2,
+              frequency_penalty: 0.2,
+              messages: [
+                { role: 'system', content: cleanClientText(sysPrompt) },
+                { role: 'user', content: cleanClientText(userPrompt) }
+              ]
+            })
           });
           if (res.ok) {
             const data = await res.json();
@@ -1327,8 +1323,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Also enable btnShareSession on debate completion
-  const origFactCheck = startFactCheck;
+  // Stop pipeline
+  if (btnStop) {
+    btnStop.addEventListener('click', () => {
+      isDebating = false;
+      if (statusText) statusText.textContent = '⏹️ 사용자에 의해 교차 검증이 중단되었습니다.';
+    });
+  }
+
+  // Start pipeline
+  if (btnStart) {
+    btnStart.addEventListener('click', () => {
+      console.log('▶️ btnStart clicked, starting fact-check...');
+      startFactCheck();
+    });
+  }
 
   // Init
   loadApiKeys();
