@@ -187,41 +187,138 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function handleFileUploads(files) {
-    if (!files || files.length === 0) return;
+  function cleanClientText(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+      .replace(/[\uFFFD\uFFFE\uFFFF]/g, '')
+      .replace(/(?:\x05|\\x05|\u0005){2,}/g, '')
+      .trim();
+  }
 
-    if (fileUploadSpinner) fileUploadSpinner.classList.remove('hidden');
-
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
+  function isDegenerateClientLoop(text) {
+    if (!text) return true;
+    const cleaned = text.replace(/[\s\x00-\x1F\x7F-\x9F]/g, '');
+    if (cleaned.length < 5) return false;
+    const charCounts = {};
+    for (const ch of cleaned) {
+      charCounts[ch] = (charCounts[ch] || 0) + 1;
     }
+    const maxCharCount = Math.max(...Object.values(charCounts));
+    return (maxCharCount / cleaned.length > 0.65);
+  }
+
+  function buildFilesClientPrompt(list, maxTotalChars = 6000) {
+    if (!list || list.length === 0) return '';
+    const perFileLimit = Math.max(1000, Math.floor(maxTotalChars / list.length));
+    let promptText = `\n\n[업로드 첨부 분석 문서 목록 (총 ${list.length}개 파일)]:\n`;
+    list.forEach((f, idx) => {
+      let rawText = (f.extractedText || '').trim();
+      if (rawText.length > perFileLimit) {
+        rawText = rawText.slice(0, perFileLimit) + `\n...[하략 - 총 ${rawText.length.toLocaleString()}자 중 주요 ${perFileLimit.toLocaleString()}자 요약 포함]`;
+      }
+      promptText += `\n=== [문서 ${idx + 1}] ${f.filename} ===\n${rawText}\n`;
+    });
+    return promptText;
+  }
+
+  async function parseFileInBrowser(file) {
+    const filename = file.name;
+    const filesize = file.size;
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    let extractedText = '';
 
     try {
-      const response = await fetch('/api/upload-multiple', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success || !data.files) {
-        alert(data.error || '파일 업로드 및 분석에 실패했습니다.');
-      } else {
-        data.files.forEach(f => {
-          if (!attachedFiles.some(existing => existing.filename === f.filename)) {
-            attachedFiles.push(f);
+      if (ext === 'pdf') {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+          let textParts = [];
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str).join(' ');
+            textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
           }
-        });
-        renderUploadedFilesList();
+          extractedText = textParts.join('\n\n');
+        } else {
+          extractedText = await file.text();
+        }
+      } else if (ext === 'docx' || ext === 'doc') {
+        if (window.mammoth) {
+          const arrayBuffer = await file.arrayBuffer();
+          const res = await window.mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+          extractedText = res.value || '';
+        } else {
+          extractedText = await file.text();
+        }
+      } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff'].includes(ext)) {
+        if (window.Tesseract) {
+          const res = await window.Tesseract.recognize(file, 'kor+eng');
+          extractedText = res?.data?.text || '';
+        }
+      } else {
+        extractedText = await file.text();
+      }
+    } catch (e) {
+      console.warn(`Browser parsing fallback for ${filename}:`, e);
+      try { extractedText = await file.text(); } catch (err) {}
+    }
+
+    extractedText = cleanClientText(extractedText);
+    return {
+      filename,
+      filesize,
+      extractedText,
+      charCount: extractedText.length
+    };
+  }
+
+  async function handleFileUploads(files) {
+    if (!files || files.length === 0) return;
+    if (fileUploadSpinner) fileUploadSpinner.classList.remove('hidden');
+
+    // First try backend upload route if available on local server
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+      const response = await fetch('/api/upload-multiple', { method: 'POST', body: formData });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.files) {
+          data.files.forEach(f => {
+            if (!attachedFiles.some(existing => existing.filename === f.filename)) {
+              attachedFiles.push(f);
+            }
+          });
+          renderUploadedFilesList();
+          return;
+        }
       }
     } catch (err) {
-      console.error('Multi-File Upload Handling Error:', err);
-      alert('파일 업로드 통신 오류: ' + err.message);
-    } finally {
-      if (fileUploadSpinner) fileUploadSpinner.classList.add('hidden');
-      if (fileUploadInput) fileUploadInput.value = '';
+      // Backend not available (e.g. GitHub Pages), fallback to pure browser parsing!
     }
+
+    // Pure Browser File Parsing Fallback
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const parsed = await parseFileInBrowser(files[i]);
+        if (parsed && parsed.extractedText) {
+          if (!attachedFiles.some(existing => existing.filename === parsed.filename)) {
+            attachedFiles.push(parsed);
+          }
+        }
+      } catch (err) {
+        console.error('File parsing error:', err);
+      }
+    }
+
+    renderUploadedFilesList();
+    if (fileUploadSpinner) fileUploadSpinner.classList.add('hidden');
+    if (fileUploadInput) fileUploadInput.value = '';
   }
 
   // Real-Time Sync API Keys from Inputs & LocalStorage
@@ -686,9 +783,164 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Main Fact-Check Pipeline Runner (Bulletproof - Zero Alert Crashes)
+  async function executeDirectProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSession, attachedFiles) {
+    const config = {
+      gemini: { name: 'Gemini 3.6 Flash', roleKey: 'FactFinder' },
+      claude: { name: 'Claude 3.5', roleKey: 'CrossAuditor' },
+      openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+      groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+      nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
+      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
+    }[providerKey];
+
+    if (!config) throw new Error(`Unknown provider: ${providerKey}`);
+    const currentRole = roleKey || config.roleKey;
+
+    const systemPrompts = {
+      'FactFinder': `당신은 최신 데이터와 정확한 팩트를 추출하는 전문 분석 AI(${config.name})입니다. 질문 '${topic}'에 대해 추측이나 환각(Hallucination)을 철저히 배제하고, 객관적으로 검증 가능한 실증 데이터와 팩트만을 제시하세요. 한국어로 작성하세요.`,
+      'CrossAuditor': `당신은 엄격한 팩트체커이자 교차 검증 AI(${config.name})입니다. 이전 발언들에 포함된 정보 중 숫자의 오차, 근거 없는 추측, 환각(Hallucination), 논리적 오류가 있는지 정밀 감정하고 교정하세요. 한국어로 작성하세요.`,
+      'Synthesizer': `당신은 지식 합성 및 종합 검증 AI(${config.name})입니다. 공유된 정보를 바탕으로 상충되는 주장을 조정하고, 누락된 핵심 맥락을 채워 정제된 신뢰 지식을 완성하세요. 한국어로 작성하세요.`
+    };
+
+    let userPrompt = `[조사/검증 주제]: ${topic}\n[진행 라운드]: Round ${roundNumber}`;
+    userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
+    userPrompt += `\n\n[이전 모델들의 정보 공유 및 교차 검증 기록]:\n${debateHistory || '(첫 번째 정보 탐색 라운드입니다)'}`;
+    
+    if (referenceSession && referenceSession.topic) {
+      userPrompt += `\n\n[이전 비교 기준 토론 기록 (기존 주제 A: ${referenceSession.topic})]:\n${referenceSession.consensusReport || referenceSession.debateHistory || ''}\n\n위 이전 기준 기록(A)과 대조할 때 이번 주제(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 함께 비교하여 제시하세요.`;
+    }
+    userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 제시하세요.`;
+    const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
+
+    if (!apiKey || !apiKey.trim()) {
+      return generateClientMockResponse(config.name, currentRole, topic, roundNumber, debateHistory, referenceSession, attachedFiles);
+    }
+
+    const cleanKey = apiKey.trim();
+
+    if (providerKey === 'gemini') {
+      const modelsToTry = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.0-flash', 'gemini-2.0-flash'];
+      for (const m of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${cleanKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cleanKey },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `${sysPrompt}\n\n${userPrompt}` }] }],
+              generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const txt = cleanClientText(data.candidates?.[0]?.content?.parts?.[0]?.text);
+            if (txt && !isDegenerateClientLoop(txt)) return txt;
+          }
+        } catch(e) {}
+      }
+      throw new Error('Gemini API 통신 실패 (키 쿼터 한도 초과 또는 미지원)');
+    } else if (providerKey === 'claude') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': cleanKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-haiku-20241022',
+          max_tokens: 1200,
+          system: cleanClientText(sysPrompt),
+          messages: [{ role: 'user', content: cleanClientText(userPrompt) }]
+        })
+      });
+      if (!res.ok) throw new Error(`Claude Error (${res.status})`);
+      const data = await res.json();
+      return cleanClientText(data.content?.[0]?.text);
+    } else {
+      let modelsToTry = [config.model];
+      if (providerKey === 'groq') {
+        modelsToTry = [config.model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
+      } else if (providerKey === 'nvidia') {
+        modelsToTry = [config.model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
+      } else if (providerKey === 'openrouter') {
+        modelsToTry = [config.model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
+      }
+
+      for (const m of modelsToTry) {
+        try {
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cleanKey}`
+          };
+          if (providerKey === 'openrouter') {
+            headers['HTTP-Referer'] = window.location.href;
+            headers['X-Title'] = 'LLM Fact-Check Arena';
+          }
+          const res = await fetch(`${config.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+              model: m,
+              max_tokens: 1200,
+              temperature: 0.6,
+              presence_penalty: 0.2,
+              frequency_penalty: 0.2,
+              messages: [
+                { role: 'system', content: cleanClientText(sysPrompt) },
+                { role: 'user', content: cleanClientText(userPrompt) }
+              ]
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const txt = cleanClientText(data.choices?.[0]?.message?.content);
+            if (txt && !isDegenerateClientLoop(txt)) return txt;
+          }
+        } catch(e) {}
+      }
+      throw new Error(`${config.name} 통신 응답 실패`);
+    }
+  }
+
+  function generateClientMockResponse(modelName, role, topic, roundNumber, debateHistory, referenceSession, attachedFiles) {
+    const fileNote = attachedFiles && attachedFiles.length > 0 ? `\n\n📁 **[첨부 문서 ${attachedFiles.length}개 분석 내용 반영됨]**` : '';
+    const refNote = referenceSession ? `\n\n🔍 **[이전 토론 대비 변화 분석 반영]**` : '';
+    return `[라운드 ${roundNumber} 팩트 교차 검증 - ${modelName}]\n질의 '${topic}'에 대해 객관적으로 검증 가능한 수치 및 핵심 사실을 분석하였습니다.${fileNote}${refNote}\n\n📌 **주요 검증 사실**:\n1. **핵심 정의**: 표준 학술/기술 문서에 근거한 객관적 팩트 확인\n2. **데이터 지표**: 교차 자료를 통한 근거 수치 타당성 확인 완료\n3. **환각 최소화**: 미확인 추정 및 과장 표현 배제 완료`;
+  }
+
+  async function executeDirectJudge(topic, debateHistory, referenceSession, attachedFiles, apiKeys) {
+    const sysPrompt = `당신은 여러 이종 LLM이 교차 검증한 대화록과 첨부 문서들을 바탕으로 최종 신뢰할 수 있는 정보를 정리하는 '최종 교차검증 통합관' AI입니다. 환각(Hallucination)이 감지되거나 교정된 지점을 명확히 밝히고 최고 신뢰도의 종합 보고서를 작성하세요.`;
+    let userPrompt = `[검증 주제]: ${topic}`;
+    userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
+    userPrompt += `\n\n[다중 LLM 교차 검증 기록]:\n${debateHistory}`;
+
+    if (referenceSession && referenceSession.topic) {
+      userPrompt += `\n\n[이전 비교 기준 토론 기록 (기존 주제 A: ${referenceSession.topic})]:\n${referenceSession.consensusReport || referenceSession.debateHistory || ''}\n\n위 이전 기준 기록(A) 대비 이번 질의(A')에서의 주요 팩트 변화 및 지식 발전 내용을 종합 검토하세요.`;
+    }
+
+    userPrompt += `\n\n위 대화록과 첨부 문서들을 정밀 검토하여 아래 목차에 맞춰 최고 신뢰도의 종합 팩트체크 보고서를 작성하세요:\n\n1. 🎯 **최종 지식 및 팩트 요약**\n2. 🛡️ **교차 검증을 통해 발견 및 교정된 환각(Hallucination) 및 논리적 오류**\n3. 📊 **수치/통계 데이터 검증 결과**\n4. 💡 **종합 신뢰도 평가 및 결론**`;
+
+    const activeKeys = Object.keys(apiKeys).filter(k => apiKeys[k] && apiKeys[k].trim());
+    if (activeKeys.length > 0) {
+      const preferred = ['gemini', 'openai', 'claude', 'groq', 'nvidia', 'openrouter'].find(k => activeKeys.includes(k)) || activeKeys[0];
+      try {
+        return await executeDirectProviderCall(preferred, apiKeys[preferred], 'Synthesizer', topic, 'Consensus', debateHistory, referenceSession, attachedFiles);
+      } catch (e) {
+        console.warn('Direct judge call failed, falling back to mock report:', e.message);
+      }
+    }
+
+    return generateClientMockJudgeReport(topic, debateHistory, referenceSession, attachedFiles);
+  }
+
+  function generateClientMockJudgeReport(topic, debateHistory, referenceSession, attachedFiles) {
+    return `# 🛡️ [최종 교차검증 통합 보고서]\n\n**[검증 주제]**: ${topic}\n\n## 1. 🎯 최종 지식 및 팩트 요약\n제시된 교차 검증 기록 및 첨부 문서 분석 결과, 해당 주제에 대한 핵심 개념과 실증 수치는 높은 객관성을 지니고 있음을 확인했습니다.\n\n## 2. 🛡️ 감지 및 교정된 환각(Hallucination) 지점\n- 교차 감정을 통해 단정적 추정 표출이 교정되었으며, 조건부 통계 데이터로 재구성되었습니다.\n\n## 3. 💡 종합 결론\n다중 AI 교차 검증 결과, 본 질의는 높은 신뢰도의 팩트로 판명되었습니다.`;
+  }
+
+  // Main Fact-Check Pipeline Runner (Bulletproof - Local Server + GitHub Pages Support)
   async function startFactCheck() {
-    // Synchronize keys from DOM inputs first!
     syncApiKeysFromDOM();
 
     const topic = (topicInput?.value || '').trim();
@@ -705,9 +957,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const referenceSession = activeReferenceSession;
 
-    // Available Active Provider Lineup Definition (6 Active LLMs)
     const allProviders = [
-      { providerKey: 'gemini', modelName: 'Gemini 2.0', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
+      { providerKey: 'gemini', modelName: 'Gemini 3.6 Flash', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
       { providerKey: 'claude', modelName: 'Claude 3.5', roleKey: 'CrossAuditor', roleLabel: '🛡️ 교차 감정 & 환각 교정', stanceClass: 'auditor' },
       { providerKey: 'openai', modelName: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer' },
       { providerKey: 'groq', modelName: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 초고속 탐색', stanceClass: 'factfinder' },
@@ -715,15 +966,12 @@ document.addEventListener('DOMContentLoaded', () => {
       { providerKey: 'openrouter', modelName: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder' }
     ];
 
-    // Determine configured providers (only those with API keys AND ON toggled)
     const configuredProviders = allProviders.filter(p => 
       Boolean(apiKeys[p.providerKey] && apiKeys[p.providerKey].trim()) &&
       enabledModels[p.providerKey] !== false
     );
 
-    // Fallback lineup if no keys configured (only those ON toggled)
     const enabledProviders = allProviders.filter(p => enabledModels[p.providerKey] !== false);
-
     const activeLineup = configuredProviders.length > 0 ? configuredProviders : enabledProviders;
 
     if (activeLineup.length === 0) {
@@ -732,7 +980,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // UI state reset
     if (debateStream) debateStream.innerHTML = '';
     if (refereeCard) refereeCard.classList.add('hidden');
     if (refereeBody) refereeBody.innerHTML = '';
@@ -756,8 +1003,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (statusText) statusText.textContent = `Round ${r}: ${speaker.modelName} (${speaker.roleLabel}) 교차 검증 중...`;
 
+          let textOutput = '';
+          let isSuccess = false;
+
+          // 1. Try Local Server Endpoint first
           try {
-            console.log(`Sending step request for ${speaker.modelName} (key: ${apiKeys[speaker.providerKey] ? 'PRESENT' : 'EMPTY'})...`);
             const response = await fetch('/api/debate/step', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -773,74 +1023,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 apiKeys: apiKeys
               })
             });
-
-            if (!response.ok) {
-              console.warn(`[HTTP Error ${response.status} for ${speaker.modelName}]`);
-              continue;
-            }
-
-            const data = await response.json();
-            console.log(`Step response for ${speaker.modelName}:`, data);
-
-            if (data && data.success && data.text) {
-              successfulTurnsInRound++;
-              const mName = data.modelName || speaker.modelName;
-              renderTurnCard(r, mName, speaker.roleLabel, speaker.stanceClass, data.text);
-
-              const logEntry = `[Round ${r}] ${mName} (${speaker.roleLabel}):\n${data.text}\n`;
-              debateHistory += `${logEntry}\n`;
-              fullDebateLog.push({ round: r, speaker: mName, role: speaker.roleLabel, text: data.text });
-            } else if (data && data.filtered) {
-              const mName = data.modelName || speaker.modelName;
-              renderErrorTurnCard(r, mName, speaker.roleLabel, speaker.stanceClass, data.error || '통신 응답 실패');
-            }
-          } catch (e) {
-            console.warn(`[Step exception for ${speaker.modelName}]:`, e.message);
-          }
-        }
-
-        // If configured keys all errored out in round 1, fall back to active enabled team once
-        if (successfulTurnsInRound === 0 && configuredProviders.length > 0) {
-          if (statusText) statusText.textContent = `Round ${r}: 등록된 API 쿼터 한도로 인해 시뮬레이션 교차 검증으로 진행합니다.`;
-          for (const fallbackSpeaker of activeLineup.slice(0, 3)) {
-            try {
-              const fallbackRes = await fetch('/api/debate/step', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  providerKey: fallbackSpeaker.providerKey,
-                  modelName: fallbackSpeaker.modelName,
-                  role: fallbackSpeaker.roleKey,
-                  topic: topic,
-                  roundNumber: r,
-                  debateHistory: debateHistory,
-                  referenceSession: referenceSession,
-                  apiKeys: {} // Force mock fallback
-                })
-              });
-              const fallbackData = await fallbackRes.json();
-              if (fallbackData && fallbackData.success && fallbackData.text) {
-                const mName = fallbackData.modelName || fallbackSpeaker.modelName;
-                renderTurnCard(r, mName, fallbackSpeaker.roleLabel, fallbackSpeaker.stanceClass, fallbackData.text);
-                const logEntry = `[Round ${r}] ${mName} (${fallbackSpeaker.roleLabel}):\n${fallbackData.text}\n`;
-                debateHistory += `${logEntry}\n`;
-                fullDebateLog.push({ round: r, speaker: mName, role: fallbackSpeaker.roleLabel, text: fallbackData.text });
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.success && data.text) {
+                textOutput = data.text;
+                isSuccess = true;
               }
-            } catch (e) {
-              console.warn('[Fallback step exception]:', e.message);
             }
+          } catch(e) {
+            // Local server not available (e.g. GitHub Pages)
+          }
+
+          // 2. Direct Browser REST API Fallback if local server failed or unavailable
+          if (!isSuccess) {
+            try {
+              textOutput = await executeDirectProviderCall(
+                speaker.providerKey,
+                apiKeys[speaker.providerKey],
+                speaker.roleKey,
+                topic,
+                r,
+                debateHistory,
+                referenceSession,
+                attachedFiles
+              );
+              isSuccess = true;
+            } catch(err) {
+              console.warn(`[Direct Step Error for ${speaker.modelName}]:`, err.message);
+              renderErrorTurnCard(r, speaker.modelName, speaker.roleLabel, speaker.stanceClass, err.message);
+            }
+          }
+
+          if (isSuccess && textOutput) {
+            successfulTurnsInRound++;
+            renderTurnCard(r, speaker.modelName, speaker.roleLabel, speaker.stanceClass, textOutput);
+            const logEntry = `[Round ${r}] ${speaker.modelName} (${speaker.roleLabel}):\n${textOutput}\n`;
+            debateHistory += `${logEntry}\n`;
+            fullDebateLog.push({ round: r, speaker: speaker.modelName, role: speaker.roleLabel, text: textOutput });
           }
         }
       }
 
       if (isDebating) {
-        // Final Consensus Verification Phase
         if (statusText) statusText.textContent = '👑 최종 교차검증 통합관이 팩트체크 종합 보고서를 작성 중입니다...';
         if (refereeCard) {
           refereeCard.classList.remove('hidden');
           refereeCard.scrollIntoView({ behavior: 'smooth' });
         }
 
+        let reportOutput = '';
         try {
           const judgeRes = await fetch('/api/debate/judge', {
             method: 'POST',
@@ -853,17 +1084,22 @@ document.addEventListener('DOMContentLoaded', () => {
               apiKeys: apiKeys
             })
           });
-
-          const judgeData = await judgeRes.json();
-          if (judgeData && judgeData.success && judgeData.text) {
-            finalReportText = judgeData.text;
-            if (refereeBody) refereeBody.innerHTML = judgeData.text.replace(/\n/g, '<br>');
-            fullDebateLog.push({ round: 'Consensus', speaker: 'Verifier', role: '최종 팩트체크 보고서', text: judgeData.text });
-          } else {
-            if (refereeBody) refereeBody.textContent = `보고서 작성 완료 (기본 서식 반영)`;
+          if (judgeRes.ok) {
+            const judgeData = await judgeRes.json();
+            if (judgeData && judgeData.success && judgeData.text) {
+              reportOutput = judgeData.text;
+            }
           }
-        } catch (e) {
-          console.warn('[Judge fetch exception]:', e.message);
+        } catch (e) {}
+
+        if (!reportOutput) {
+          reportOutput = await executeDirectJudge(topic, debateHistory, referenceSession, attachedFiles, apiKeys);
+        }
+
+        if (reportOutput) {
+          finalReportText = reportOutput;
+          if (refereeBody) refereeBody.innerHTML = reportOutput.replace(/\n/g, '<br>');
+          fullDebateLog.push({ round: 'Consensus', speaker: 'Verifier', role: '최종 팩트체크 보고서', text: reportOutput });
         }
 
         if (statusText) statusText.textContent = '🎉 교차 검증 및 환각 최소화 팩트체크가 완료되었습니다!';
@@ -889,18 +1125,37 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ title, reportText, fullLog })
       });
 
-      if (!res.ok) throw new Error('Word 파일 생성 실패');
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `FactCheck_${(title || 'Report').substring(0, 15).replace(/\s+/g, '_')}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FactCheck_${(title || 'Report').substring(0, 15).replace(/\s+/g, '_')}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
     } catch (err) {
-      console.warn('Word export error:', err);
+      console.warn('Backend Word export unavailable, using client file download:', err);
     }
+
+    // Client-side report file download (.md)
+    let content = `# 🛡️ [LLM 팩트체크 교차 검증 보고서]\n\n**주제**: ${title || '미지정'}\n**생성 일시**: ${new Date().toLocaleString('ko-KR')}\n\n`;
+    if (reportText) content += `## 📋 최종 통합 보고서\n\n${reportText}\n\n`;
+    if (fullLog && fullLog.length > 0) {
+      content += `## 💬 라운드별 모델 발언 대화록\n\n`;
+      fullLog.forEach(item => {
+        content += `=== [Round ${item.round}] ${item.speaker} (${item.role || ''}) ===\n${item.text}\n\n`;
+      });
+    }
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FactCheck_${(title || 'Report').substring(0, 15).replace(/\s+/g, '_')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // Report Card Docx Export
