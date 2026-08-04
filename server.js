@@ -21,7 +21,7 @@ const PROVIDER_CONFIGS = {
   openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 초고속 탐색', stanceClass: 'factfinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
   nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', roleLabel: '🚀 NVIDIA 심층 교차 감정', stanceClass: 'auditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
-  openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
+  openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'openrouter/free' }
 };
 
 // Helper for calling Gemini API (Supports both traditional AIzaSy and new 2026 AQ.Ab keys)
@@ -168,7 +168,7 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   // Define candidate models for each provider if primary model returns 404/413 or fails
   let modelsToTry = [model];
   if (baseUrl.includes('openrouter')) {
-    modelsToTry = [model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
+    modelsToTry = ['openrouter/free', 'openai/gpt-oss-20b:free', 'qwen/qwen-2.5-72b-instruct:free', 'meta-llama/llama-3.1-8b-instruct:free', 'openrouter/auto'];
   } else if (baseUrl.includes('groq')) {
     modelsToTry = [model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
   } else if (baseUrl.includes('nvidia')) {
@@ -181,20 +181,26 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   let lastError = null;
   for (const currentModel of modelsToTry) {
     try {
+      const payload = {
+        model: currentModel,
+        max_tokens: 1200,
+        temperature: 0.6,
+        presence_penalty: 0.2,
+        frequency_penalty: 0.2,
+        messages: [
+          { role: 'system', content: sanitizedSys },
+          { role: 'user', content: sanitizedUser }
+        ]
+      };
+
+      if (baseUrl.includes('openrouter')) {
+        payload.reasoning = { enabled: true };
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify({
-          model: currentModel,
-          max_tokens: 1200,
-          temperature: 0.6,
-          presence_penalty: 0.2,
-          frequency_penalty: 0.2,
-          messages: [
-            { role: 'system', content: sanitizedSys },
-            { role: 'user', content: sanitizedUser }
-          ]
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
