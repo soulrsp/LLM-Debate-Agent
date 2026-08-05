@@ -1556,6 +1556,49 @@ input[type="range"] {
   font-size: 0.85rem;
 }
 
+/* Eye-Catching Highlight Box for Final Consensus Conclusion */
+.consensus-highlight-box {
+  margin: 1.2rem 0;
+  padding: 1.1rem 1.3rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(234, 88, 12, 0.1) 100%);
+  border: 1.5px solid rgba(245, 158, 11, 0.55);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.18), inset 0 0 15px rgba(245, 158, 11, 0.05);
+  color: #fef08a;
+  line-height: 1.65;
+  font-size: 0.98rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.consensus-highlight-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #f59e0b, #ea580c);
+}
+
+.consensus-highlight-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #fbbf24;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.consensus-highlight-content {
+  color: #fef9c3;
+  font-weight: 500;
+}
+
 .vault-items-list {
   display: flex;
   flex-direction: column;
