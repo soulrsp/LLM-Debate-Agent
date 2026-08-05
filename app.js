@@ -579,52 +579,104 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Set selected item as Reference for Next Conversation A'
+  // Set Multi-Reference Sessions State & Banner UI
+  function addReferenceSession(item) {
+    if (!item) return;
+    if (!activeReferenceSessions.some(s => s.id === item.id)) {
+      activeReferenceSessions.push(item);
+    }
+    updateReferenceUI();
+  }
+
+  function removeReferenceSession(itemId) {
+    activeReferenceSessions = activeReferenceSessions.filter(s => s.id !== itemId);
+    updateReferenceUI();
+  }
+
+  function toggleReferenceSession(item) {
+    if (!item) return;
+    if (activeReferenceSessions.some(s => s.id === item.id)) {
+      removeReferenceSession(item.id);
+    } else {
+      addReferenceSession(item);
+    }
+  }
+
+  function clearAllReferenceSessions() {
+    activeReferenceSessions = [];
+    updateReferenceUI();
+  }
+
+  function updateReferenceUI() {
+    const activeReferencesList = document.getElementById('active-references-list');
+    const refBannerCountText = document.getElementById('ref-banner-count-text');
+
+    if (refBannerCountText) {
+      refBannerCountText.textContent = `이전 토론 기록 ${activeReferenceSessions.length}개 연계 지정됨`;
+    }
+
+    if (activeReferencesList) {
+      activeReferencesList.innerHTML = '';
+      activeReferenceSessions.forEach(s => {
+        const chip = document.createElement('div');
+        chip.className = 'ref-chip';
+        chip.innerHTML = `📌 ${escapeHtml(s.title || s.topic)} <span class="ref-chip-remove" title="연계 해제">&times;</span>`;
+        chip.querySelector('.ref-chip-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeReferenceSession(s.id);
+        });
+        activeReferencesList.appendChild(chip);
+      });
+    }
+
+    if (activeReferenceBanner) {
+      if (activeReferenceSessions.length > 0) {
+        activeReferenceBanner.classList.remove('hidden');
+      } else {
+        activeReferenceBanner.classList.add('hidden');
+      }
+    }
+
+    updateSetAsReferenceBtnUI();
+  }
+
+  function updateSetAsReferenceBtnUI() {
+    if (btnSetAsReference && selectedHistoryItem) {
+      const isLinked = activeReferenceSessions.some(s => s.id === selectedHistoryItem.id);
+      if (isLinked) {
+        btnSetAsReference.textContent = '✓ 연계 중 (클릭 시 연계 해제)';
+        btnSetAsReference.classList.remove('btn-primary');
+        btnSetAsReference.classList.add('btn-secondary');
+      } else {
+        btnSetAsReference.textContent = '📌 이전 토론 다중 연계에 추가 (+연계)';
+        btnSetAsReference.classList.remove('btn-secondary');
+        btnSetAsReference.classList.add('btn-primary');
+      }
+    }
+  }
+
+  // Toggle reference session when clicking button inside history detail modal
   if (btnSetAsReference) {
     btnSetAsReference.addEventListener('click', () => {
       if (selectedHistoryItem) {
-        setReferenceSession(selectedHistoryItem);
-        if (historyModal) historyModal.classList.add('hidden');
+        toggleReferenceSession(selectedHistoryItem);
       }
     });
-  }
-
-  // Delete Detail Item
-  if (btnDeleteDetailItem) {
-    btnDeleteDetailItem.addEventListener('click', () => {
-      if (selectedHistoryItem && confirm('선택한 히스토리를 삭제하시겠습니까?')) {
-        savedHistories = savedHistories.filter(h => h.id !== selectedHistoryItem.id);
-        selectedHistoryItem = null;
-        if (historyDetailContent) historyDetailContent.classList.add('hidden');
-        if (historyDetailEmpty) historyDetailEmpty.classList.remove('hidden');
-        saveHistoriesToStorage();
-      }
-    });
-  }
-
-  // Set Reference Session State & Banner UI
-  function setReferenceSession(item) {
-    activeReferenceSession = item;
-    if (item) {
-      if (referenceSessionSelect) referenceSessionSelect.value = item.id;
-      if (refBannerTopic) refBannerTopic.textContent = item.title;
-      if (activeReferenceBanner) activeReferenceBanner.classList.remove('hidden');
-    } else {
-      if (referenceSessionSelect) referenceSessionSelect.value = '';
-      if (activeReferenceBanner) activeReferenceBanner.classList.add('hidden');
-    }
   }
 
   if (referenceSessionSelect) {
     referenceSessionSelect.addEventListener('change', (e) => {
       const found = savedHistories.find(h => h.id === e.target.value);
-      setReferenceSession(found || null);
+      if (found) {
+        addReferenceSession(found);
+        referenceSessionSelect.value = ''; // Reset select to placeholder so user can add more
+      }
     });
   }
 
   if (btnClearReference) {
     btnClearReference.addEventListener('click', () => {
-      setReferenceSession(null);
+      clearAllReferenceSessions();
     });
   }
 
@@ -813,7 +865,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function executeDirectProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSession, attachedFiles) {
+  function buildMultiReferenceClientPrompt(sessions, singleSession) {
+    let list = [];
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      list = sessions;
+    } else if (singleSession && (singleSession.topic || singleSession.title)) {
+      list = [singleSession];
+    }
+
+    if (list.length === 0) return '';
+
+    let promptText = `\n\n[이전 비교 기준 토론 기록 연계 (총 ${list.length}개 세션 연계 중)]:\n`;
+    list.forEach((s, idx) => {
+      const summaryText = (s.consensusReport || s.debateHistory || '').trim();
+      promptText += `\n=== [연계 기준 ${idx + 1}] 주제: "${s.title || s.topic}" (일시: ${s.date || '최근'}) ===\n${summaryText.slice(0, 3000)}\n`;
+    });
+    promptText += `\n위 ${list.length}개의 이전 비교 기준 기록들(A1, A2...) 대비 이번 검증 질의(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 종합 대조하여 상세 분석하세요.`;
+    return promptText;
+  }
+
+  async function executeDirectProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSessions, attachedFiles) {
     const config = {
       gemini: { name: 'Gemini 3.6 Flash', roleKey: 'FactFinder' },
       claude: { name: 'Claude 3.5', roleKey: 'CrossAuditor' },
@@ -835,10 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let userPrompt = `[조사/검증 주제]: ${topic}\n[진행 라운드]: Round ${roundNumber}`;
     userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
     userPrompt += `\n\n[이전 모델들의 정보 공유 및 교차 검증 기록]:\n${debateHistory || '(첫 번째 정보 탐색 라운드입니다)'}`;
-    
-    if (referenceSession && referenceSession.topic) {
-      userPrompt += `\n\n[이전 비교 기준 토론 기록 (기존 주제 A: ${referenceSession.topic})]:\n${referenceSession.consensusReport || referenceSession.debateHistory || ''}\n\n위 이전 기준 기록(A)과 대조할 때 이번 주제(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 함께 비교하여 제시하세요.`;
-    }
+    userPrompt += buildMultiReferenceClientPrompt(referenceSessions || activeReferenceSessions);
     userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 제시하세요.`;
     const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
 
@@ -940,15 +1008,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return `[라운드 ${roundNumber} 팩트 교차 검증 - ${modelName}]\n질의 '${topic}'에 대해 객관적으로 검증 가능한 수치 및 핵심 사실을 분석하였습니다.${fileNote}${refNote}\n\n📌 **주요 검증 사실**:\n1. **핵심 정의**: 표준 학술/기술 문서에 근거한 객관적 팩트 확인\n2. **데이터 지표**: 교차 자료를 통한 근거 수치 타당성 확인 완료\n3. **환각 최소화**: 미확인 추정 및 과장 표현 배제 완료`;
   }
 
-  async function executeDirectJudge(topic, debateHistory, referenceSession, attachedFiles, apiKeys) {
+  async function executeDirectJudge(topic, debateHistory, referenceSessions, attachedFiles, apiKeys) {
     const sysPrompt = `당신은 여러 이종 LLM이 교차 검증한 대화록과 첨부 문서들을 바탕으로 최종 신뢰할 수 있는 정보를 정리하는 '최종 교차검증 통합관' AI입니다. 환각(Hallucination)이 감지되거나 교정된 지점을 명확히 밝히고 최고 신뢰도의 종합 보고서를 작성하세요.`;
     let userPrompt = `[검증 주제]: ${topic}`;
     userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
     userPrompt += `\n\n[다중 LLM 교차 검증 기록]:\n${debateHistory}`;
-
-    if (referenceSession && referenceSession.topic) {
-      userPrompt += `\n\n[이전 비교 기준 토론 기록 (기존 주제 A: ${referenceSession.topic})]:\n${referenceSession.consensusReport || referenceSession.debateHistory || ''}\n\n위 이전 기준 기록(A) 대비 이번 질의(A')에서의 주요 팩트 변화 및 지식 발전 내용을 종합 검토하세요.`;
-    }
+    userPrompt += buildMultiReferenceClientPrompt(referenceSessions || activeReferenceSessions);
 
     userPrompt += `\n\n위 대화록과 첨부 문서들을 정밀 검토하여 아래 목차에 맞춰 최고 신뢰도의 종합 팩트체크 보고서를 작성하세요:\n\n1. 🎯 **최종 지식 및 팩트 요약**\n2. 🛡️ **교차 검증을 통해 발견 및 교정된 환각(Hallucination) 및 논리적 오류**\n3. 📊 **수치/통계 데이터 검증 결과**\n4. 💡 **종합 신뢰도 평가 및 결론**`;
 
@@ -956,13 +1021,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeKeys.length > 0) {
       const preferred = ['gemini', 'openai', 'claude', 'groq', 'nvidia', 'openrouter'].find(k => activeKeys.includes(k)) || activeKeys[0];
       try {
-        return await executeDirectProviderCall(preferred, apiKeys[preferred], 'Synthesizer', topic, 'Consensus', debateHistory, referenceSession, attachedFiles);
+        return await executeDirectProviderCall(preferred, apiKeys[preferred], 'Synthesizer', topic, 'Consensus', debateHistory, referenceSessions || activeReferenceSessions, attachedFiles);
       } catch (e) {
         console.warn('Direct judge call failed, falling back to mock report:', e.message);
       }
     }
 
-    return generateClientMockJudgeReport(topic, debateHistory, referenceSession, attachedFiles);
+    return generateClientMockJudgeReport(topic, debateHistory, referenceSessions, attachedFiles);
   }
 
   function generateClientMockJudgeReport(topic, debateHistory, referenceSession, attachedFiles) {
@@ -1048,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 topic: topic,
                 roundNumber: r,
                 debateHistory: debateHistory,
-                referenceSession: referenceSession,
+                referenceSessions: activeReferenceSessions,
                 attachedFiles: attachedFiles,
                 apiKeys: apiKeys
               })
@@ -1074,7 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 topic,
                 r,
                 debateHistory,
-                referenceSession,
+                activeReferenceSessions,
                 attachedFiles
               );
               isSuccess = true;
@@ -1109,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify({
               topic: topic,
               debateHistory: debateHistory,
-              referenceSession: referenceSession,
+              referenceSessions: activeReferenceSessions,
               attachedFiles: attachedFiles,
               apiKeys: apiKeys
             })
@@ -1123,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
 
         if (!reportOutput) {
-          reportOutput = await executeDirectJudge(topic, debateHistory, referenceSession, attachedFiles, apiKeys);
+          reportOutput = await executeDirectJudge(topic, debateHistory, activeReferenceSessions, attachedFiles, apiKeys);
         }
 
         if (reportOutput) {
