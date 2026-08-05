@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let enabledModels = { gemini: true, claude: true, openai: true, groq: true, nvidia: true, openrouter: true };
   let savedHistories = [];
   let selectedHistoryItem = null;
-  let activeReferenceSession = null;
+  let activeReferenceSessions = []; // Array of reference session objects for multi-link comparison
   let attachedFiles = []; // Array of { filename, filesize, charCount, extractedText }
 
   // File Upload Event Listeners & Handler
@@ -688,6 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateSetAsReferenceBtnUI();
+    renderHistoryList(); // Refresh card badges ([+ 연계] / [✓ 연계중]) in history modal
   }
 
   function updateSetAsReferenceBtnUI() {
