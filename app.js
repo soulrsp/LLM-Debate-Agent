@@ -644,11 +644,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSetAsReference && selectedHistoryItem) {
       const isLinked = activeReferenceSessions.some(s => s.id === selectedHistoryItem.id);
       if (isLinked) {
-        btnSetAsReference.textContent = '✓ 연계 중 (클릭 시 연계 해제)';
+        btnSetAsReference.innerHTML = '<span class="icon">✓</span> 연계 중 (해제)';
         btnSetAsReference.classList.remove('btn-primary');
         btnSetAsReference.classList.add('btn-secondary');
       } else {
-        btnSetAsReference.textContent = '📌 이전 토론 다중 연계에 추가 (+연계)';
+        btnSetAsReference.innerHTML = '<span class="icon">📌</span> 비교 연계 추가';
         btnSetAsReference.classList.remove('btn-secondary');
         btnSetAsReference.classList.add('btn-primary');
       }
@@ -1292,100 +1292,97 @@ document.addEventListener('DOMContentLoaded', () => {
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
 
-  // Ultra-Compact Share URL Generator (Prevents URL Too Long errors)
-  function compressSharePayloadToUrl(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
-    const slimLogs = (logs || []).map(l => ({
-      round: l.round,
-      speaker: l.speaker,
-      role: l.role,
-      text: (l.text || '').length > 450 ? (l.text || '').slice(0, 450) + '... (약약본)' : (l.text || '')
-    }));
+  // Ultra-Short & Ultra-Lean Share URL Generator
+  async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
+    const rawPayload = {
+      topic: topic || '공유된 팩트체크',
+      date: date || new Date().toLocaleString('ko-KR'),
+      rounds: rounds || 1,
+      consensusReport: consensusReport || '',
+      logs: logs || [],
+      attachedFilesMeta: attachedFilesMeta || []
+    };
 
-    let sharePayload = {
-      t: topic || '공유된 팩트체크',
+    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL (e.g. ?share=s_a9f3b12e)
+    try {
+      const res = await fetch('/api/share/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: rawPayload })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.shareUrl) {
+          return data.shareUrl;
+        }
+      }
+    } catch (e) {
+      // Local server unavailable (e.g. static GitHub Pages)
+    }
+
+    // 2. Client Lean Summary Mode URL Fallback (< 250 characters total)
+    const summaryPayload = {
+      t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
-      r: rounds || 1,
       c: consensusReport || '',
-      l: slimLogs,
-      f: (attachedFilesMeta || []).map(f => ({ name: f.filename, size: f.filesize }))
+      l: (logs || []).map(l => ({ round: l.round, speaker: l.speaker, role: l.role }))
     };
 
     try {
-      let jsonStr = JSON.stringify(sharePayload);
-      let compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
+      const jsonStr = JSON.stringify(summaryPayload);
+      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
       const baseUrl = window.location.origin + window.location.pathname;
-      let fullUrl = `${baseUrl}?share=${compressed}`;
-
-      // Secondary safety check: if URL is still longer than 3000 chars, compress turn cards further
-      if (fullUrl.length > 3000) {
-        sharePayload.l = (logs || []).map(l => ({
-          round: l.round,
-          speaker: l.speaker,
-          role: l.role,
-          text: (l.text || '').length > 180 ? (l.text || '').slice(0, 180) + '...' : (l.text || '')
-        }));
-        jsonStr = JSON.stringify(sharePayload);
-        compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
-        fullUrl = `${baseUrl}?share=${compressed}`;
-      }
-
-      return fullUrl;
-    } catch (e) {
-      console.error('Share URL compression failed:', e);
+      return `${baseUrl}?share=${compressed}`;
+    } catch (err) {
+      console.error('Client share URL generation failed:', err);
       return null;
     }
   }
 
-  function generateShareUrl() {
+  async function copyCurrentShareUrl() {
     const topic = (topicInput?.value || '').trim();
-    if (!finalReportText && fullDebateLog.length === 0) return null;
-
-    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
-    return compressSharePayloadToUrl(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
-  }
-
-  function generateShareUrlFromItem(item) {
-    if (!item) return null;
-    return compressSharePayloadToUrl(item.title, item.date, item.rounds, item.consensusReport, item.logs, item.attachedFilesMeta);
-  }
-
-  function copyShareUrlToClipboard() {
-    const shareUrl = generateShareUrl();
-    if (!shareUrl) {
+    if (!finalReportText && fullDebateLog.length === 0) {
       alert('공유할 교차 검증 대화록이 없습니다. 검증을 먼저 진행해 주세요!');
+      return;
+    }
+    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
+    const url = await generateShareUrlAsync(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
+    if (!url) {
+      alert('공유 링크를 생성하지 못했습니다.');
       return;
     }
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        alert('🔗 팩트체크 대화 공유 링크가 클립보드에 복사되었습니다! 🎉\n이 링크를 타인에게 전송하면 다른 사람도 동일한 결과를 즉시 확인할 수 있습니다.');
+      navigator.clipboard.writeText(url).then(() => {
+        alert(`🔗 팩트체크 초단축 공유 링크가 복사되었습니다! 🎉\n\n[생성된 공유 링크]:\n${url}`);
       }).catch(() => {
-        prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+        prompt('아래 공유 링크를 복사하세요:', url);
       });
     } else {
-      prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+      prompt('아래 공유 링크를 복사하세요:', url);
     }
   }
 
-  if (btnShareSession) btnShareSession.addEventListener('click', copyShareUrlToClipboard);
-  if (btnShareReport) btnShareReport.addEventListener('click', copyShareUrlToClipboard);
+  if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
+  if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
 
   if (btnShareDetailHistory) {
-    btnShareDetailHistory.addEventListener('click', () => {
+    btnShareDetailHistory.addEventListener('click', async () => {
       if (!selectedHistoryItem) {
         alert('공유할 히스토리 문서를 선택해 주세요!');
         return;
       }
-      const shareUrl = generateShareUrlFromItem(selectedHistoryItem);
-      if (shareUrl) {
+      const item = selectedHistoryItem;
+      const url = await generateShareUrlAsync(item.title, item.date, item.rounds, item.consensusReport, item.logs, item.attachedFilesMeta);
+      if (url) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(shareUrl).then(() => {
-            alert('🔗 히스토리 보관 문서 공유 링크가 클립보드에 복사되었습니다! 🎉\n이 링크를 타인에게 전송하면 수신자가 바로 동일한 팩트체크 결과를 확인할 수 있습니다.');
+          navigator.clipboard.writeText(url).then(() => {
+            alert(`🔗 히스토리 문서 초단축 공유 링크가 복사되었습니다! 🎉\n\n[생성된 공유 링크]:\n${url}`);
           }).catch(() => {
-            prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+            prompt('아래 공유 링크를 복사하세요:', url);
           });
         } else {
-          prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+          prompt('아래 공유 링크를 복사하세요:', url);
         }
       }
     });
@@ -1407,11 +1404,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function checkSharedUrlParam() {
+  function renderSharedSessionData(data) {
+    if (!data) return;
+    const topic = data.topic || data.t || '';
+    const date = data.date || data.d || '최근';
+    const consensusReport = data.consensusReport || data.c || '';
+    const logs = data.logs || data.l || [];
+    const filesMeta = data.attachedFilesMeta || data.f || [];
+
+    if (topicInput) topicInput.value = topic;
+    if (debateStream) debateStream.innerHTML = '';
+    if (sharedViewBanner) sharedViewBanner.classList.remove('hidden');
+    if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${topic || '공유 문서'}" | 생성일: ${date}`;
+
+    if (logs && logs.length > 0) {
+      logs.forEach(turn => {
+        if (turn.round !== 'Consensus') {
+          const stanceClass = getStanceClass(turn.speaker);
+          const turnText = turn.text || `[Round ${turn.round}] ${turn.speaker} (${turn.role || ''}) 교차 검증 진행 완료`;
+          renderTurnCard(turn.round, turn.speaker, turn.role, stanceClass, turnText, filesMeta);
+        }
+      });
+    }
+
+    if (consensusReport) {
+      finalReportText = consensusReport;
+      fullDebateLog = logs;
+      if (refereeCard) refereeCard.classList.remove('hidden');
+      if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(consensusReport);
+    }
+
+    if (btnShareSession) btnShareSession.disabled = false;
+    if (btnExportDocxFull) btnExportDocxFull.disabled = false;
+  }
+
+  async function checkSharedUrlParam() {
     const urlParams = new URLSearchParams(window.location.search);
     if (!urlParams.has('share')) return;
 
     const shareCode = urlParams.get('share');
+
+    // Case 1: Ultra-Short Server Share Vault ID (s_...)
+    if (shareCode.startsWith('s_')) {
+      try {
+        const res = await fetch(`/api/share/${shareCode}`);
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData && resData.success && resData.payload) {
+            renderSharedSessionData(resData.payload);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Server Share Vault lookup failed:', e);
+      }
+    }
+
+    // Case 2: LZString Compressed Summary Payload
     try {
       let jsonStr = '';
       if (window.LZString) {
@@ -1421,40 +1470,7 @@ document.addEventListener('DOMContentLoaded', () => {
         jsonStr = decodeURIComponent(atob(shareCode));
       }
       const raw = JSON.parse(jsonStr);
-
-      // Support both compact keys (t, d, c, l, f) and legacy keys
-      const topic = raw.t || raw.topic;
-      const date = raw.d || raw.date || '최근';
-      const consensusReport = raw.c || raw.consensusReport;
-      const logs = raw.l || raw.logs || [];
-      const filesMeta = raw.f || raw.attachedFilesMeta || [];
-
-      if (topic || consensusReport) {
-        console.log('🔗 Loaded Shared Session:', { topic, date, logsCount: logs.length });
-        if (topicInput) topicInput.value = topic || '';
-        if (debateStream) debateStream.innerHTML = '';
-        if (sharedViewBanner) sharedViewBanner.classList.remove('hidden');
-        if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${topic || '공유 문서'}" | 생성일: ${date}`;
-
-        if (logs && logs.length > 0) {
-          logs.forEach(turn => {
-            if (turn.round !== 'Consensus') {
-              const stanceClass = getStanceClass(turn.speaker);
-              renderTurnCard(turn.round, turn.speaker, turn.role, stanceClass, turn.text, filesMeta);
-            }
-          });
-        }
-
-        if (consensusReport) {
-          finalReportText = consensusReport;
-          fullDebateLog = logs;
-          if (refereeCard) refereeCard.classList.remove('hidden');
-          if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(consensusReport);
-        }
-
-        if (btnShareSession) btnShareSession.disabled = false;
-        if (btnExportDocxFull) btnExportDocxFull.disabled = false;
-      }
+      renderSharedSessionData(raw);
     } catch (e) {
       console.warn('Failed to parse share URL param:', e);
     }
