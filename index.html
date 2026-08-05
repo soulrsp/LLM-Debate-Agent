@@ -8,10 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=20260804_11">
-  <!-- Browser Client Parsing Libraries for GitHub Pages -->
+  <!-- Browser Client Parsing & LZ-String Compression Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 </head>
 <body>
   <div class="background-globes">
@@ -29,6 +30,9 @@
       </div>
     </div>
     <div class="header-actions">
+      <button id="btn-share-session" class="btn btn-outline" disabled title="완료된 교차 검증 대화록 링크 공유">
+        <span class="icon">🔗</span> 대화 공유하기 (링크 복사)
+      </button>
       <button id="btn-history-modal" class="btn btn-secondary">
         <span class="icon">📚</span> 히스토리 보관함 <span id="history-count-badge" class="key-count-badge">0</span>
       </button>
@@ -216,6 +220,20 @@
 
     <!-- Right Content: Live Arena Stream -->
     <section class="arena-panel">
+      <!-- Shared View Mode Announcement Banner (Visible when opening ?share=... links) -->
+      <div id="shared-view-banner" class="glass-card shared-view-banner hidden">
+        <div class="banner-content">
+          <span class="banner-icon">🔗</span>
+          <div>
+            <div class="banner-title">타인이 공유한 팩트체크 교차 검증 결과 공유 뷰어</div>
+            <div class="banner-desc" id="shared-banner-desc">저장된 대화록과 교차 검증 보고서를 확인하고 계십니다.</div>
+          </div>
+        </div>
+        <button type="button" id="btn-reset-shared-view" class="btn btn-primary btn-sm">
+          🚀 나도 신규 교차 검증 시작하기
+        </button>
+      </div>
+
       <div class="arena-header glass-card">
         <div class="status-indicator">
           <span class="status-dot" id="status-dot"></span>
@@ -240,6 +258,9 @@
             <h2>최종 교차검증 통합 보고서 (Verified Fact-Check)</h2>
           </div>
           <div class="referee-download-actions">
+            <button id="btn-share-report" class="btn btn-outline btn-sm" title="보고서 공유 링크 복사">
+              <span class="icon">🔗</span> 대화 공유 (링크 복사)
+            </button>
             <button id="btn-save-current-history" class="btn btn-primary btn-sm">
               <span class="icon">💾</span> 히스토리에 보관
             </button>
@@ -295,6 +316,9 @@
               <div class="detail-action-buttons">
                 <button id="btn-set-as-reference" class="btn btn-primary btn-sm">
                   <span class="icon">📌</span> 이 기록을 다음 토론(A') 참고용으로 지정
+                </button>
+                <button id="btn-share-detail-history" class="btn btn-outline btn-sm" title="히스토리 보관 문서 링크 공유">
+                  <span class="icon">🔗</span> 대화 공유 (링크 복사)
                 </button>
                 <button id="btn-download-detail-docx" class="btn btn-secondary btn-sm">
                   <span class="icon">📘</span> Word (.docx) 다운로드
