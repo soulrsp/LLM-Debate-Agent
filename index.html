@@ -111,13 +111,16 @@
         <input type="range" id="rounds-select" min="1" max="5" value="1" step="1">
       </div>
 
-      <div class="form-actions" style="margin-bottom: 1.2rem;">
+      <div class="form-actions" style="margin-bottom: 0.5rem;">
         <button id="btn-start" class="btn btn-primary btn-large">
           <span class="icon">🔍</span> 교차 검증 시작하기
         </button>
         <button id="btn-stop" class="btn btn-danger btn-large hidden">
           <span class="icon">⏹️</span> 중단하기
         </button>
+      </div>
+      <div class="api-key-warning-note" style="margin-bottom: 1.2rem; font-size: 0.76rem; color: #fbbf24; text-align: center; line-height: 1.35; background: rgba(245, 158, 11, 0.1); padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.25);">
+        ⚠️ <b>API Key를 입력하지 않으면</b> 잘못된(가상) 결과가 나올 수 있습니다. 상단 <b>[🔑 API 키 설정]</b>을 먼저 확인해 주세요!
       </div>
 
       <!-- Applicable LLM Models List Panel -->
