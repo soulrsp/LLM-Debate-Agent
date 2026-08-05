@@ -548,8 +548,31 @@ app.post('/api/debate/judge', async (req, res) => {
     res.json({ success: true, text: responseText, isMock });
   } catch (err) {
     console.error('Error in /api/debate/judge:', err);
-    res.json({ success: false, error: err.message, filtered: true });
+    res.status(500).json({ error: err.message });
   }
+});
+
+// Share Link Vault Store (Ultra-Short URL Support)
+const SHARE_STORE = new Map();
+
+app.post('/api/share/save', (req, res) => {
+  try {
+    const { payload } = req.body;
+    if (!payload) return res.status(400).json({ error: 'Payload missing' });
+    const shareId = 's_' + Math.random().toString(36).substring(2, 10);
+    SHARE_STORE.set(shareId, payload);
+    const hostUrl = `${req.protocol}://${req.get('host')}`;
+    res.json({ success: true, shareId, shareUrl: `${hostUrl}/?share=${shareId}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/share/:shareId', (req, res) => {
+  const { shareId } = req.params;
+  const data = SHARE_STORE.get(shareId);
+  if (!data) return res.status(404).json({ error: 'Shared session not found' });
+  res.json({ success: true, payload: data });
 });
 
 // Word (.docx) Document Generator Endpoint
