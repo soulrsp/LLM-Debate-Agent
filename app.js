@@ -1222,6 +1222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Share Conversation via URL Link (?share=...) Feature
   const btnShareSession = document.getElementById('btn-share-session');
   const btnShareReport = document.getElementById('btn-share-report');
+  const btnShareDetailHistory = document.getElementById('btn-share-detail-history');
   const sharedViewBanner = document.getElementById('shared-view-banner');
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
@@ -1251,6 +1252,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function generateShareUrlFromItem(item) {
+    if (!item) return null;
+    const sharePayload = {
+      topic: item.title || '공유된 히스토리 팩트체크 문서',
+      date: item.date || new Date().toLocaleString('ko-KR'),
+      rounds: item.rounds || 1,
+      consensusReport: item.consensusReport || '',
+      debateHistory: item.debateHistory || '',
+      logs: item.logs || [],
+      attachedFilesMeta: item.attachedFilesMeta || []
+    };
+
+    try {
+      const jsonStr = JSON.stringify(sharePayload);
+      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
+      const baseUrl = window.location.origin + window.location.pathname;
+      return `${baseUrl}?share=${compressed}`;
+    } catch (e) {
+      console.error('History Share URL generation error:', e);
+      return null;
+    }
+  }
+
   function copyShareUrlToClipboard() {
     const shareUrl = generateShareUrl();
     if (!shareUrl) {
@@ -1271,6 +1295,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnShareSession) btnShareSession.addEventListener('click', copyShareUrlToClipboard);
   if (btnShareReport) btnShareReport.addEventListener('click', copyShareUrlToClipboard);
+
+  if (btnShareDetailHistory) {
+    btnShareDetailHistory.addEventListener('click', () => {
+      if (!selectedHistoryItem) {
+        alert('공유할 히스토리 문서를 선택해 주세요!');
+        return;
+      }
+      const shareUrl = generateShareUrlFromItem(selectedHistoryItem);
+      if (shareUrl) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(() => {
+            alert('🔗 히스토리 보관 문서 공유 링크가 클립보드에 복사되었습니다! 🎉\n이 링크를 타인에게 전송하면 수신자가 바로 동일한 팩트체크 결과를 확인할 수 있습니다.');
+          }).catch(() => {
+            prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+          });
+        } else {
+          prompt('아래 링크를 복사하여 공유하세요:', shareUrl);
+        }
+      }
+    });
+  }
 
   if (btnResetSharedView) {
     btnResetSharedView.addEventListener('click', () => {
