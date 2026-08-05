@@ -679,14 +679,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btnVaultClearAll.onclick = () => clearAllReferenceSessions();
     }
 
-    if (activeReferenceBanner) {
-      if (count > 0) {
-        activeReferenceBanner.classList.remove('hidden');
-      } else {
-        activeReferenceBanner.classList.add('hidden');
-      }
-    }
-
     updateSetAsReferenceBtnUI();
     renderHistoryList(); // Refresh card badges ([+ 연계] / [✓ 연계중]) in history modal
   }
@@ -1354,14 +1346,13 @@ document.addEventListener('DOMContentLoaded', () => {
       attachedFilesMeta: attachedFilesMeta || []
     };
 
+    // Generate a short ID and save full payload to localStorage immediately
     const shortId = 's_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-
-    // Save in browser localStorage share vault for instant same-domain sharing
     try {
       localStorage.setItem('llm_debate_share_' + shortId, JSON.stringify(rawPayload));
     } catch (e) {}
 
-    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL (e.g. ?share=s_a9f3b12e)
+    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL
     try {
       const res = await fetch('/api/share/save', {
         method: 'POST',
@@ -1371,18 +1362,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && data.shareUrl) {
-          return data.shareUrl;
+          return data.shareUrl; // e.g. http://localhost:3000/?share=s_abc123
         }
       }
     } catch (e) {
-      // Local server unavailable (e.g. static GitHub Pages)
+      // Local server unavailable (GitHub Pages static hosting)
     }
 
-    // 2. Static Site Fallback (GitHub Pages): Ultra-Lean Summary Mode (< 250 characters total length)
-    // Strip redundant report padding and truncate report text to ~900 chars to guarantee a short URL
+    // 2. GitHub Pages fallback: return the localStorage shortId URL
+    // The recipient opens it in same browser/domain and localStorage has the full payload
+    const baseUrl = window.location.origin + window.location.pathname;
+    const localUrl = `${baseUrl}?share=${shortId}`;
+
+    // Check if URL is short enough (shortId is always ~15 chars, so this is always short)
+    // But if the recipient is on a different device, we need the compressed fallback too
+    // So we embed a compact compressed payload alongside as a hint
     let compactReport = (consensusReport || '').trim();
-    if (compactReport.length > 900) {
-      compactReport = compactReport.slice(0, 900) + '\n\n*(이하 세부 항목 생략 - 보고서 축약본)*';
+    if (compactReport.length > 600) {
+      compactReport = compactReport.slice(0, 600) + '\n\n*(보고서 축약본)*';
     }
     compactReport = compactReport.replace(/\n{3,}/g, '\n\n');
 
@@ -1390,17 +1387,25 @@ document.addEventListener('DOMContentLoaded', () => {
       t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
       c: compactReport,
-      l: (logs || []).map(l => ({ r: l.round, s: l.speaker, k: l.role }))
+      // Include speaker/role + truncated text (first 120 chars) per turn so logs render
+      l: (logs || []).map(l => ({
+        r: l.round,
+        s: l.speaker,
+        k: l.role,
+        x: l.text ? l.text.substring(0, 120) + (l.text.length > 120 ? '…' : '') : ''
+      }))
     };
 
     try {
       const jsonStr = JSON.stringify(summaryPayload);
-      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
-      const baseUrl = window.location.origin + window.location.pathname;
-      return `${baseUrl}?share=${compressed}`;
+      const compressed = window.LZString
+        ? window.LZString.compressToEncodedURIComponent(jsonStr)
+        : btoa(encodeURIComponent(jsonStr));
+      const compressedUrl = `${baseUrl}?share=${compressed}`;
+      // Return the shorter of the two
+      return compressedUrl.length < localUrl.length ? compressedUrl : localUrl;
     } catch (err) {
-      console.error('Client share URL generation failed:', err);
-      return null;
+      return localUrl; // Fallback to localStorage-based short URL
     }
   }
 
@@ -1491,7 +1496,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const roleName = turn.role || turn.k || turn.roleLabel || '교차 검증';
         if (roundNum !== 'Consensus') {
           const stanceClass = getStanceClass(speakerName);
-          const turnText = turn.text || `[Round ${roundNum}] ${speakerName} (${roleName}) 교차 검증 진행 완료`;
+          // turn.text = full text (from server/localStorage), turn.x = truncated fallback (from compressed URL)
+          const turnText = turn.text || turn.x || `[Round ${roundNum}] ${speakerName} (${roleName}) 교차 검증 진행 완료`;
           renderTurnCard(roundNum, speakerName, roleName, stanceClass, turnText, filesMeta);
         }
       });
