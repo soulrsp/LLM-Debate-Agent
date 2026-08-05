@@ -94,14 +94,26 @@
       <!-- Compare with Previous Multiple Baseline Sessions (A1, A2... vs A') -->
       <div class="form-group">
         <label for="reference-session-select">
-          이전 토론 기록들(A1, A2...) 다중 연계 <span class="opt-label">(다중 연계 가능)</span>
+          이전 토론 기록들(A1, A2...) 다중 연계 <span class="opt-label">(다중 선택 가능)</span>
           <span class="tooltip-wrapper">
             <span class="help-icon-badge">❓</span>
             <span class="tooltip-popup">이전 검증 기록들을 선택하면, 이번 검증 A'에서 <b>다수의 이전 토론 기록과 대조하여 지식/수치의 변화 및 종합 추이</b>를 다각도로 분석합니다.</span>
           </span>
         </label>
-        <select id="reference-session-select" class="custom-select">
-          <option value="">-- 이전 토론 목록에서 추가 선택 (+연계) --</option>
+        
+        <!-- Dedicated Multi-Link Status Box -->
+        <div id="multi-reference-vault-box" class="multi-reference-vault-box">
+          <div class="vault-box-header">
+            <span class="vault-box-title">📌 지정된 다중 연계 목록 (<b id="vault-count-text" style="color: #38bdf8;">0개</b>)</span>
+            <button id="btn-vault-clear-all" class="btn-vault-clear hidden">&times; 전체 해제</button>
+          </div>
+          <div id="vault-items-list" class="vault-items-list">
+            <div class="vault-empty-text">연계된 기록이 없습니다. 아래 목록에서 선택하거나 보관함에서 지정하세요.</div>
+          </div>
+        </div>
+
+        <select id="reference-session-select" class="custom-select" style="margin-top: 0.5rem;">
+          <option value="">-- 히스토리 목록에서 추가 선택 (+연계) --</option>
         </select>
       </div>
 
