@@ -170,7 +170,7 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   if (baseUrl.includes('openrouter')) {
     modelsToTry = [model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
   } else if (baseUrl.includes('groq')) {
-    modelsToTry = [model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
+    modelsToTry = [model, 'llama-3.1-8b-instant', 'llama-3.3-70b-specdec', 'qwen-2.5-coder-32b', 'deepseek-r1-distill-qwen-32b'];
   } else if (baseUrl.includes('nvidia')) {
     modelsToTry = [model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
   }
