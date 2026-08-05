@@ -1029,8 +1029,9 @@ document.addEventListener('DOMContentLoaded', () => {
                   },
                   body: JSON.stringify({
                     model: orModel,
-                    max_tokens: 4096,
+                    max_tokens: 8192,
                     temperature: 0.6,
+                    reasoning: { max_tokens: 1024 },
                     messages: [
                       { role: 'system', content: cleanClientText(sysPrompt) },
                       { role: 'user', content: cleanClientText(userPrompt) }
@@ -1069,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: headers,
             body: JSON.stringify({
               model: m,
-              max_tokens: 4096,
+              max_tokens: 8192,
               temperature: 0.6,
               presence_penalty: 0.2,
               frequency_penalty: 0.2,
