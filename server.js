@@ -21,7 +21,7 @@ const PROVIDER_CONFIGS = {
   openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 초고속 탐색', stanceClass: 'factfinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
   nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', roleLabel: '🚀 NVIDIA 심층 교차 감정', stanceClass: 'auditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
-  openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'openrouter/free' }
+  openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
 };
 
 // Helper for calling Gemini API (Supports both traditional AIzaSy and new 2026 AQ.Ab keys)
@@ -168,7 +168,7 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   // Define candidate models for each provider if primary model returns 404/413 or fails
   let modelsToTry = [model];
   if (baseUrl.includes('openrouter')) {
-    modelsToTry = ['openrouter/free', 'openai/gpt-oss-20b:free', 'qwen/qwen-2.5-72b-instruct:free', 'meta-llama/llama-3.1-8b-instruct:free', 'openrouter/auto'];
+    modelsToTry = [model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
   } else if (baseUrl.includes('groq')) {
     modelsToTry = [model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
   } else if (baseUrl.includes('nvidia')) {
@@ -181,26 +181,20 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   let lastError = null;
   for (const currentModel of modelsToTry) {
     try {
-      const payload = {
-        model: currentModel,
-        max_tokens: 1200,
-        temperature: 0.6,
-        presence_penalty: 0.2,
-        frequency_penalty: 0.2,
-        messages: [
-          { role: 'system', content: sanitizedSys },
-          { role: 'user', content: sanitizedUser }
-        ]
-      };
-
-      if (baseUrl.includes('openrouter')) {
-        payload.reasoning = { enabled: true };
-      }
-
       const response = await fetch(url, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          model: currentModel,
+          max_tokens: 1200,
+          temperature: 0.6,
+          presence_penalty: 0.2,
+          frequency_penalty: 0.2,
+          messages: [
+            { role: 'system', content: sanitizedSys },
+            { role: 'user', content: sanitizedUser }
+          ]
+        })
       });
 
       if (!response.ok) {
@@ -396,8 +390,27 @@ function buildFilesPrompt(attachedFiles, attachedFile, maxTotalChars = 6000) {
   return promptText;
 }
 
+function buildMultiReferencePrompt(referenceSessions, referenceSession) {
+  let list = [];
+  if (Array.isArray(referenceSessions) && referenceSessions.length > 0) {
+    list = referenceSessions;
+  } else if (referenceSession && referenceSession.topic) {
+    list = [referenceSession];
+  }
+
+  if (list.length === 0) return '';
+
+  let promptText = `\n\n[이전 비교 기준 토론 기록 연계 (총 ${list.length}개 세션 연계 중)]:\n`;
+  list.forEach((s, idx) => {
+    const summaryText = (s.consensusReport || s.debateHistory || '').trim();
+    promptText += `\n=== [연계 기준 ${idx + 1}] 주제: "${s.title || s.topic}" (일시: ${s.date || '최근'}) ===\n${summaryText.slice(0, 3000)}\n`;
+  });
+  promptText += `\n위 ${list.length}개의 이전 비교 기준 기록들(A1, A2...) 대비 이번 검증 질의(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 종합 대조하여 상세 분석하세요.`;
+  return promptText;
+}
+
 // Dispatch single model call with error filtering
-async function executeProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSession, attachedFile, attachedFiles) {
+async function executeProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSession, attachedFile, attachedFiles, referenceSessions) {
   const config = PROVIDER_CONFIGS[providerKey];
   if (!config) throw new Error(`Unknown provider: ${providerKey}`);
 
@@ -411,10 +424,7 @@ async function executeProviderCall(providerKey, apiKey, roleKey, topic, roundNum
   let userPrompt = `[조사/검증 주제]: ${topic}\n[진행 라운드]: Round ${roundNumber}`;
   userPrompt += buildFilesPrompt(attachedFiles, attachedFile, 6000);
   userPrompt += `\n\n[이전 모델들의 정보 공유 및 교차 검증 기록]:\n${debateHistory || '(첫 번째 정보 탐색 라운드입니다)'}`;
-  
-  if (referenceSession && referenceSession.topic) {
-    userPrompt += `\n\n[이전 비교 기준 토론 기록 (기존 주제 A: ${referenceSession.topic})]:\n${referenceSession.consensusReport || referenceSession.debateHistory || ''}\n\n위 이전 기준 기록(A)과 대조할 때 이번 주제(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 함께 비교하여 제시하세요.`;
-  }
+  userPrompt += buildMultiReferencePrompt(referenceSessions, referenceSession);
   userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 제시하세요.`;
 
   const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
