@@ -35,9 +35,10 @@
 
 ### 4. OpenRouter API (🌐 무제한 무료 오픈소스 LLM)
 - **특징**: 다양한 오픈소스 AI 무료 제공.
+- **📌 주요 참고 사항**: 계정 인증 및 API 키 활성화를 위해 소액($1) 크레딧(Credit)을 충전해야 합니다. **본 프로젝트에서 사용되는 `:free` 무료 라우팅 모델들(예: Meta Llama 3.3 70B Free 등)은 결제 금액이 실제로 전혀 차감되지 않으며 전액 무료로 이용 가능합니다.**
 - **발급 방법**:
   1. [OpenRouter Keys](https://openrouter.ai/keys) 접속 및 가입
-  2. `Create Key` 클릭 후 `sk-or-v1-...` 키 복사 및 등록
+  2. Account ➔ Credits에서 $1 충전 후 `Create Key` 클릭하여 `sk-or-v1-...` 키 복사 및 등록
 
 ---
 
