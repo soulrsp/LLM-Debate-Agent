@@ -456,6 +456,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function saveHistoriesToStorage() {
+    savedHistories.sort((a, b) => {
+      const tsA = a.timestamp || parseInt((a.id || '').replace('hist_', ''), 10) || 0;
+      const tsB = b.timestamp || parseInt((b.id || '').replace('hist_', ''), 10) || 0;
+      return tsB - tsA; // Newest session first
+    });
     localStorage.setItem('llm_debate_saved_histories', JSON.stringify(savedHistories));
     updateHistoryUI();
   }
@@ -674,34 +679,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Save current finished session
+  function saveSessionToHistoryAuto() {
+    if (!finalReportText && fullDebateLog.length === 0) return;
+    const topic = (topicInput?.value || '').trim() || '검증 주제';
+    const nowTimestamp = Date.now();
+    const formattedDate = new Date(nowTimestamp).toLocaleString('ko-KR');
+
+    // Filter out existing history with same title to replace with fresh results
+    savedHistories = savedHistories.filter(h => h.title !== topic);
+
+    const newItem = {
+      id: 'hist_' + nowTimestamp,
+      timestamp: nowTimestamp,
+      title: topic,
+      date: formattedDate,
+      rounds: parseInt(roundsSelect.value, 10) || 1,
+      consensusReport: finalReportText,
+      debateHistory: debateHistory,
+      logs: fullDebateLog,
+      notes: ''
+    };
+
+    savedHistories.unshift(newItem);
+    saveHistoriesToStorage();
+    console.log('💾 Automatically saved session to history:', newItem.title);
+  }
+
+  // Save current finished session manually
   if (btnSaveCurrentHistory) {
     btnSaveCurrentHistory.addEventListener('click', () => {
-      if (!finalReportText) return;
-      const topic = topicInput.value.trim();
-      const existing = savedHistories.find(h => h.title === topic);
-
-      if (existing) {
-        existing.date = new Date().toLocaleString('ko-KR');
-        existing.rounds = parseInt(roundsSelect.value, 10);
-        existing.consensusReport = finalReportText;
-        existing.debateHistory = debateHistory;
-        existing.logs = fullDebateLog;
-        saveHistoriesToStorage();
-      } else {
-        const newItem = {
-          id: 'hist_' + Date.now(),
-          title: topic,
-          date: new Date().toLocaleString('ko-KR'),
-          rounds: parseInt(roundsSelect.value, 10),
-          consensusReport: finalReportText,
-          debateHistory: debateHistory,
-          logs: fullDebateLog,
-          notes: ''
-        };
-        savedHistories.unshift(newItem);
-        saveHistoriesToStorage();
-      }
+      saveSessionToHistoryAuto();
+      alert('💾 현재 검증 내용이 히스토리에 보관되었습니다!');
     });
   }
 
@@ -1127,6 +1135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusText) statusText.textContent = '🎉 교차 검증 및 환각 최소화 팩트체크가 완료되었습니다!';
         if (btnExportDocxFull) btnExportDocxFull.disabled = false;
         if (btnShareSession) btnShareSession.disabled = false;
+
+        // Automatically save session to history vault (newest first)
+        saveSessionToHistoryAuto();
       }
     } catch (err) {
       console.error('Error in startFactCheck:', err);
