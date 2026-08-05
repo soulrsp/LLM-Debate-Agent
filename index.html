@@ -283,7 +283,7 @@
       <div class="modal-header">
         <div class="history-title-badge">
           <h3>📚 히스토리 보관함 & 비교 센터</h3>
-          <span class="subtitle-inline">이전 검증 기록을 보관하고 다음 검증(A')의 비교 기준으로 지정할 수 있습니다.</span>
+          <span class="subtitle-inline">• 자동 보관 • 이전 토론(A vs A') 다중 연계 • 공유 링크 생성 • Word 다운로드</span>
         </div>
         <button id="btn-close-history-modal" class="close-btn">&times;</button>
       </div>
@@ -292,8 +292,10 @@
         <!-- Left Column: History Items List -->
         <div class="history-left-pane">
           <div class="history-toolbar">
-            <input type="text" id="history-search-input" placeholder="주제명 검색...">
-            <button id="btn-clear-all-histories" class="btn btn-danger btn-sm">전체 삭제</button>
+            <input type="text" id="history-search-input" placeholder="검증 주제 검색...">
+            <button id="btn-clear-all-histories" class="btn btn-danger btn-sm" title="모든 히스토리 삭제">
+              <span class="icon">🗑️</span> 전체 삭제
+            </button>
           </div>
           <div id="history-list-container" class="history-list-container">
             <div class="empty-history-text">저장된 히스토리가 없습니다.</div>
@@ -304,8 +306,12 @@
         <div class="history-right-pane">
           <div id="history-detail-empty" class="history-detail-empty">
             <div class="detail-icon">📄</div>
-            <h4>히스토리 항목을 선택하세요</h4>
-            <p>왼쪽 목록에서 세션을 선택하면 상세 검증 대화록과 심판 보고서를 확인하고, <b>[다음 토론 참고용으로 지정]</b>하거나 <b>[Word 파일 다운로드]</b>를 진행할 수 있습니다.</p>
+            <h4>검증 세션을 선택하세요</h4>
+            <div class="detail-bullet-guide" style="text-align: left; max-width: 420px; margin-top: 0.8rem; line-height: 1.6; font-size: 0.85rem;">
+              <div>• <b>대화록 & 보고서 검토</b>: 이종 AI의 라운드별 감정 및 최종 팩트체크 보고서</div>
+              <div>• <b>다중 비교 연계</b>: 📌 <b>비교 연계 추가</b> 버튼으로 다음 검증(A')의 대조 세션 지정</div>
+              <div>• <b>문서 공유 & 다운로드</b>: 🔗 <b>링크 공유</b> 및 📘 <b>Word 다운로드</b> 지원</div>
+            </div>
           </div>
 
           <div id="history-detail-content" class="history-detail-content hidden">
@@ -316,13 +322,13 @@
               </div>
               <div class="detail-action-buttons">
                 <button id="btn-set-as-reference" class="btn btn-primary btn-sm">
-                  <span class="icon">📌</span> 이 기록을 다음 토론(A') 참고용으로 지정
+                  <span class="icon">📌</span> 비교 연계 추가
                 </button>
-                <button id="btn-share-detail-history" class="btn btn-outline btn-sm" title="히스토리 보관 문서 링크 공유">
-                  <span class="icon">🔗</span> 대화 공유 (링크 복사)
+                <button id="btn-share-detail-history" class="btn btn-outline btn-sm" title="히스토리 문서 공유 링크 복사">
+                  <span class="icon">🔗</span> 링크 공유
                 </button>
                 <button id="btn-download-detail-docx" class="btn btn-secondary btn-sm">
-                  <span class="icon">📘</span> Word (.docx) 다운로드
+                  <span class="icon">📘</span> Word 다운로드
                 </button>
                 <button id="btn-delete-detail-item" class="btn btn-danger btn-sm">
                   <span class="icon">🗑️</span> 삭제
@@ -428,7 +434,7 @@
               <strong>🚀 NVIDIA Build</strong>: <a href="https://build.nvidia.com/" target="_blank" rel="noopener">NVIDIA Build Console ↗</a> (1,000 무료 크레딧)
             </div>
             <div class="help-item">
-              <strong>🌐 OpenRouter</strong>: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter Keys ↗</a> (무료 오픈소스 AI 모델 제공)
+              <strong>🌐 OpenRouter</strong>: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter Keys ↗</a> (키 활성화 시 $1 충전 필요 / `:free` 무료 모델은 실제 차감 0원)
             </div>
             <div class="help-item">
               <strong>🎭 Anthropic Claude</strong>: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console ↗</a>
