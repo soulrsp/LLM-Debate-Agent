@@ -1011,30 +1011,40 @@ document.addEventListener('DOMContentLoaded', () => {
           // Reroute: use OpenRouter key (if available) to call nemotron via OpenRouter
           const openrouterKey = apiKeys['openrouter'];
           if (openrouterKey && openrouterKey.trim()) {
-            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openrouterKey.trim()}`,
-                'HTTP-Referer': window.location.href,
-                'X-Title': 'LLM Fact-Check Arena'
-              },
-              body: JSON.stringify({
-                model: 'nvidia/llama-3.3-nemotron-super-49b-v1:free',
-                max_tokens: 1200,
-                temperature: 0.6,
-                messages: [
-                  { role: 'system', content: cleanClientText(sysPrompt) },
-                  { role: 'user', content: cleanClientText(userPrompt) }
-                ]
-              })
-            });
-            if (orRes.ok) {
-              const orData = await orRes.json();
-              const txt = cleanClientText(orData.choices?.[0]?.message?.content);
-              if (txt && !isDegenerateClientLoop(txt)) return txt;
+            const orModels = [
+              'nvidia/nemotron-3-super-120b-a12b:free',
+              'nvidia/nemotron-3-nano-30b-a3b:free',
+              'nvidia/nemotron-nano-9b-v2:free'
+            ];
+            let orSuccess = false;
+            for (const orModel of orModels) {
+              try {
+                const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${openrouterKey.trim()}`,
+                    'HTTP-Referer': window.location.href,
+                    'X-Title': 'LLM Fact-Check Arena'
+                  },
+                  body: JSON.stringify({
+                    model: orModel,
+                    max_tokens: 1200,
+                    temperature: 0.6,
+                    messages: [
+                      { role: 'system', content: cleanClientText(sysPrompt) },
+                      { role: 'user', content: cleanClientText(userPrompt) }
+                    ]
+                  })
+                });
+                if (orRes.ok) {
+                  const orData = await orRes.json();
+                  const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+                  if (txt && !isDegenerateClientLoop(txt)) { orSuccess = true; return txt; }
+                }
+              } catch(e) {}
             }
-            throw new Error('NVIDIA Nemotron (via OpenRouter) 통신 응답 실패');
+            if (!orSuccess) throw new Error('NVIDIA Nemotron (via OpenRouter) 통신 응답 실패');
           } else {
             throw new Error('GitHub Pages에서 NVIDIA 사용 시 OpenRouter 키가 필요합니다 (CORS 우회)');
           }
