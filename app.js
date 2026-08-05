@@ -1002,7 +1002,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       let modelsToTry = [config.model];
       if (providerKey === 'groq') {
-        modelsToTry = [config.model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
+        modelsToTry = [
+          config.model,
+          'llama-3.1-8b-instant',
+          'llama-3.3-70b-specdec',
+          'qwen-2.5-coder-32b',
+          'deepseek-r1-distill-qwen-32b'
+        ];
       } else if (providerKey === 'nvidia') {
         // NVIDIA's API blocks browser direct calls (CORS) on static hosting (GitHub Pages)
         // Detect: if we're not on localhost, route NVIDIA through OpenRouter's nemotron model instead
@@ -1087,6 +1093,37 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         } catch(e) {}
       }
+
+      // If Groq rate-limited (429) or all candidates failed, fallback to OpenRouter's Llama 3.3 Free if key exists
+      if (providerKey === 'groq' && apiKeys['openrouter'] && apiKeys['openrouter'].trim()) {
+        try {
+          const openrouterKey = apiKeys['openrouter'].trim();
+          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${openrouterKey}`,
+              'HTTP-Referer': window.location.href,
+              'X-Title': 'LLM Fact-Check Arena'
+            },
+            body: JSON.stringify({
+              model: 'meta-llama/llama-3.3-70b-instruct:free',
+              max_tokens: 8192,
+              temperature: 0.6,
+              messages: [
+                { role: 'system', content: cleanClientText(sysPrompt) },
+                { role: 'user', content: cleanClientText(userPrompt) }
+              ]
+            })
+          });
+          if (orRes.ok) {
+            const orData = await orRes.json();
+            const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+            if (txt && !isDegenerateClientLoop(txt)) return txt;
+          }
+        } catch(e) {}
+      }
+
       throw new Error(`${config.name} 통신 응답 실패`);
     }
   }
