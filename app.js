@@ -823,6 +823,93 @@ document.addEventListener('DOMContentLoaded', () => {
     return escaped.replace(/\n/g, '<br>');
   }
 
+  // Helper: Trigger browser download for generated Blob text data
+  function downloadBlobFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+    try {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('File download failed:', err);
+    }
+  }
+
+  // Helper: Extract downloadable code blocks or file links from LLM text
+  function extractDownloadableItems(text) {
+    if (!text) return [];
+    const items = [];
+    
+    // 1. Detect Markdown Code Blocks (```lang ... ```)
+    const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+    let match;
+    let blockCount = 0;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      blockCount++;
+      const lang = (match[1] || 'txt').toLowerCase();
+      const codeContent = match[2].trim();
+
+      if (!codeContent) continue;
+
+      let ext = 'txt';
+      let icon = '💾';
+      let label = `자료_${blockCount}.txt`;
+
+      if (['csv'].includes(lang)) {
+        ext = 'csv'; icon = '📊'; label = `데이터_${blockCount}.csv`;
+      } else if (['json'].includes(lang)) {
+        ext = 'json'; icon = '📋'; label = `데이터_${blockCount}.json`;
+      } else if (['python', 'py'].includes(lang)) {
+        ext = 'py'; icon = '🐍'; label = `스크립트_${blockCount}.py`;
+      } else if (['javascript', 'js'].includes(lang)) {
+        ext = 'js'; icon = '⚡'; label = `코드_${blockCount}.js`;
+      } else if (['html'].includes(lang)) {
+        ext = 'html'; icon = '🌐'; label = `웹문서_${blockCount}.html`;
+      } else if (['sql'].includes(lang)) {
+        ext = 'sql'; icon = '🗄️'; label = `쿼리_${blockCount}.sql`;
+      } else if (['markdown', 'md'].includes(lang)) {
+        ext = 'md'; icon = '📝'; label = `문서_${blockCount}.md`;
+      } else {
+        label = `자료_${blockCount}.${lang || 'txt'}`;
+      }
+
+      items.push({
+        type: 'code_block',
+        filename: label,
+        content: codeContent,
+        icon: icon,
+        ext: ext
+      });
+    }
+
+    // 2. Detect Download URLs (.pdf, .csv, .xlsx, .docx, .zip) in markdown links or plain URLs
+    const urlRegex = /(https?:\/\/[^\s\)]+\.(pdf|csv|xlsx|docx|zip|txt|json))/gi;
+    let urlMatch;
+    const seenUrls = new Set();
+
+    while ((urlMatch = urlRegex.exec(text)) !== null) {
+      const url = urlMatch[1];
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+
+      const filename = url.split('/').pop().split('?')[0] || '다운로드_자료';
+      items.push({
+        type: 'external_url',
+        filename: filename,
+        url: url,
+        icon: '🔗'
+      });
+    }
+
+    return items;
+  }
+
   function renderTurnCard(round, modelName, roleLabel, stanceClass, text, attachedFilesList = []) {
     const safeModelName = String(modelName || 'AI Model');
     const safeRoleLabel = String(roleLabel || '교차 검증');
@@ -854,6 +941,25 @@ document.addEventListener('DOMContentLoaded', () => {
       sourceBadgesHtml += '</div>';
     }
 
+    // Check for downloadable items inside text
+    const downloadableItems = extractDownloadableItems(safeText);
+    let downloadToolbarHtml = '';
+
+    if (downloadableItems.length > 0) {
+      downloadToolbarHtml = `
+        <div class="turn-download-toolbar">
+          <div class="download-toolbar-title">📥 생성된 자료 및 파일 다운로드 (${downloadableItems.length}개)</div>
+      `;
+      downloadableItems.forEach((item, idx) => {
+        downloadToolbarHtml += `
+          <button type="button" class="btn-card-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+            <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+          </button>
+        `;
+      });
+      downloadToolbarHtml += `</div>`;
+    }
+
     card.innerHTML = `
       <div class="turn-header">
         <div class="speaker-info">
@@ -865,8 +971,30 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="turn-time">${now}</div>
       </div>
-      <div class="turn-body">${formatTextWithReferences(safeText)}${sourceBadgesHtml}</div>
+      <div class="turn-body">
+        ${formatTextWithReferences(safeText)}
+        ${sourceBadgesHtml}
+        ${downloadToolbarHtml}
+      </div>
     `;
+
+    // Attach click events to download buttons
+    if (downloadableItems.length > 0) {
+      const btnDownloads = card.querySelectorAll('.btn-card-download');
+      btnDownloads.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+          const item = downloadableItems[idx];
+          if (!item) return;
+
+          if (item.type === 'code_block') {
+            downloadBlobFile(item.filename, item.content);
+          } else if (item.type === 'external_url') {
+            window.open(item.url, '_blank');
+          }
+        });
+      });
+    }
 
     if (debateStream) {
       debateStream.appendChild(card);
@@ -1326,7 +1454,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (reportOutput) {
           finalReportText = reportOutput;
-          if (refereeBody) refereeBody.innerHTML = reportOutput.replace(/\n/g, '<br>');
+          if (refereeBody) {
+            const reportItems = extractDownloadableItems(reportOutput);
+            let reportDownloadToolbarHtml = '';
+            if (reportItems.length > 0) {
+              reportDownloadToolbarHtml = `
+                <div class="turn-download-toolbar" style="margin-top: 1.2rem;">
+                  <div class="download-toolbar-title">📥 보고서 내 생성 자료 및 파일 다운로드 (${reportItems.length}개)</div>
+              `;
+              reportItems.forEach((item, idx) => {
+                reportDownloadToolbarHtml += `
+                  <button type="button" class="btn-card-download btn-report-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+                    <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+                  </button>
+                `;
+              });
+              reportDownloadToolbarHtml += `</div>`;
+            }
+
+            refereeBody.innerHTML = reportOutput.replace(/\n/g, '<br>') + reportDownloadToolbarHtml;
+
+            if (reportItems.length > 0) {
+              const btnReportDownloads = refereeBody.querySelectorAll('.btn-report-download');
+              btnReportDownloads.forEach(btn => {
+                btn.addEventListener('click', () => {
+                  const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+                  const item = reportItems[idx];
+                  if (!item) return;
+
+                  if (item.type === 'code_block') {
+                    downloadBlobFile(item.filename, item.content);
+                  } else if (item.type === 'external_url') {
+                    window.open(item.url, '_blank');
+                  }
+                });
+              });
+            }
+          }
           fullDebateLog.push({ round: 'Consensus', speaker: 'Verifier', role: '최종 팩트체크 보고서', text: reportOutput });
         }
 
