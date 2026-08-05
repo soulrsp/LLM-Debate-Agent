@@ -50,16 +50,17 @@
     <aside class="config-panel glass-card">
       <h2 class="panel-title"><span class="icon">⚙️</span> 검증 질의 및 라운드 설정</h2>
 
-      <!-- Active Reference Session Indicator Banner -->
+      <!-- Active Multi-Reference Sessions Indicator Banner -->
       <div id="active-reference-banner" class="reference-active-banner hidden">
-        <div class="ref-banner-content">
-          <span class="ref-pin-icon">📌</span>
-          <div>
-            <div class="ref-banner-title">이전 토론(A) 참고 기준 지정됨</div>
-            <div id="ref-banner-topic" class="ref-banner-sub"></div>
+        <div class="ref-banner-content" style="width: 100%;">
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 0.3rem;">
+            <div class="ref-banner-title" style="display: flex; align-items: center; gap: 0.3rem;">
+              <span class="ref-pin-icon">📌</span> <span id="ref-banner-count-text">이전 토론 기록 0개 연계 지정됨</span>
+            </div>
+            <button id="btn-clear-reference" class="btn-text-clear" title="모든 연계 해제">&times; 전체 해제</button>
           </div>
+          <div id="active-references-list" class="active-references-list" style="display: flex; flex-wrap: wrap; gap: 0.4rem;"></div>
         </div>
-        <button id="btn-clear-reference" class="btn-text-clear" title="참고 해제">&times;</button>
       </div>
 
       <div class="form-group">
@@ -90,17 +91,17 @@
         <div id="uploaded-files-list" class="uploaded-files-list hidden"></div>
       </div>
 
-      <!-- Compare with Previous Baseline Session (A vs A') -->
+      <!-- Compare with Previous Multiple Baseline Sessions (A1, A2... vs A') -->
       <div class="form-group">
         <label for="reference-session-select">
-          이전 토론 기록(A) 비교 연계 <span class="opt-label">(선택)</span>
+          이전 토론 기록들(A1, A2...) 다중 연계 <span class="opt-label">(다중 연계 가능)</span>
           <span class="tooltip-wrapper">
             <span class="help-icon-badge">❓</span>
-            <span class="tooltip-popup">이전 검증 기록 A를 선택하면, 이번 검증 A'에서 <b>의견/지식의 변화 및 차이점</b>을 집중 분석합니다.</span>
+            <span class="tooltip-popup">이전 검증 기록들을 선택하면, 이번 검증 A'에서 <b>다수의 이전 토론 기록과 대조하여 지식/수치의 변화 및 종합 추이</b>를 다각도로 분석합니다.</span>
           </span>
         </label>
         <select id="reference-session-select" class="custom-select">
-          <option value="">-- 없음 (독립 검증 진행) --</option>
+          <option value="">-- 이전 토론 목록에서 추가 선택 (+연계) --</option>
         </select>
       </div>
 
