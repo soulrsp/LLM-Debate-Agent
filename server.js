@@ -186,7 +186,7 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
         headers: headers,
         body: JSON.stringify({
           model: currentModel,
-          max_tokens: 1200,
+          max_tokens: 8192,
           temperature: 0.6,
           presence_penalty: 0.2,
           frequency_penalty: 0.2,
