@@ -954,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
 
     if (!apiKey || !apiKey.trim()) {
-      return generateClientMockResponse(config.name, currentRole, topic, roundNumber, debateHistory, referenceSession, attachedFiles);
+      return generateClientMockResponse(config.name, currentRole, topic, roundNumber, debateHistory, activeReferenceSessions, attachedFiles);
     }
 
     const cleanKey = apiKey.trim();
@@ -1004,6 +1004,41 @@ document.addEventListener('DOMContentLoaded', () => {
       if (providerKey === 'groq') {
         modelsToTry = [config.model, 'llama-3.1-8b-instant', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'];
       } else if (providerKey === 'nvidia') {
+        // NVIDIA's API blocks browser direct calls (CORS) on static hosting (GitHub Pages)
+        // Detect: if we're not on localhost, route NVIDIA through OpenRouter's nemotron model instead
+        const isStaticHosting = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
+        if (isStaticHosting) {
+          // Reroute: use OpenRouter key (if available) to call nemotron via OpenRouter
+          const openrouterKey = apiKeys['openrouter'];
+          if (openrouterKey && openrouterKey.trim()) {
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openrouterKey.trim()}`,
+                'HTTP-Referer': window.location.href,
+                'X-Title': 'LLM Fact-Check Arena'
+              },
+              body: JSON.stringify({
+                model: 'nvidia/llama-3.3-nemotron-super-49b-v1:free',
+                max_tokens: 1200,
+                temperature: 0.6,
+                messages: [
+                  { role: 'system', content: cleanClientText(sysPrompt) },
+                  { role: 'user', content: cleanClientText(userPrompt) }
+                ]
+              })
+            });
+            if (orRes.ok) {
+              const orData = await orRes.json();
+              const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+              if (txt && !isDegenerateClientLoop(txt)) return txt;
+            }
+            throw new Error('NVIDIA Nemotron (via OpenRouter) 통신 응답 실패');
+          } else {
+            throw new Error('GitHub Pages에서 NVIDIA 사용 시 OpenRouter 키가 필요합니다 (CORS 우회)');
+          }
+        }
         modelsToTry = [config.model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
       } else if (providerKey === 'openrouter') {
         modelsToTry = [config.model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
