@@ -1093,8 +1093,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fullDebateLog = [];
     finalReportText = '';
 
-    const referenceSession = activeReferenceSession;
-
     const allProviders = [
       { providerKey: 'gemini', modelName: 'Gemini 3.6 Flash', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
       { providerKey: 'claude', modelName: 'Claude 3.5', roleKey: 'CrossAuditor', roleLabel: '🛡️ 교차 감정 & 환각 교정', stanceClass: 'auditor' },
