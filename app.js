@@ -1292,52 +1292,61 @@ document.addEventListener('DOMContentLoaded', () => {
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
 
-  function generateShareUrl() {
-    const topic = (topicInput?.value || '').trim();
-    if (!finalReportText && fullDebateLog.length === 0) return null;
+  // Ultra-Compact Share URL Generator (Prevents URL Too Long errors)
+  function compressSharePayloadToUrl(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
+    const slimLogs = (logs || []).map(l => ({
+      round: l.round,
+      speaker: l.speaker,
+      role: l.role,
+      text: (l.text || '').length > 450 ? (l.text || '').slice(0, 450) + '... (약약본)' : (l.text || '')
+    }));
 
-    const sharePayload = {
-      topic: topic || '공유된 교차 검증 주제',
-      date: new Date().toLocaleString('ko-KR'),
-      rounds: parseInt(roundsSelect.value, 10) || 1,
-      consensusReport: finalReportText,
-      debateHistory: debateHistory,
-      logs: fullDebateLog,
-      attachedFilesMeta: attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }))
+    let sharePayload = {
+      t: topic || '공유된 팩트체크',
+      d: date || new Date().toLocaleString('ko-KR'),
+      r: rounds || 1,
+      c: consensusReport || '',
+      l: slimLogs,
+      f: (attachedFilesMeta || []).map(f => ({ name: f.filename, size: f.filesize }))
     };
 
     try {
-      const jsonStr = JSON.stringify(sharePayload);
-      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
+      let jsonStr = JSON.stringify(sharePayload);
+      let compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
       const baseUrl = window.location.origin + window.location.pathname;
-      return `${baseUrl}?share=${compressed}`;
+      let fullUrl = `${baseUrl}?share=${compressed}`;
+
+      // Secondary safety check: if URL is still longer than 3000 chars, compress turn cards further
+      if (fullUrl.length > 3000) {
+        sharePayload.l = (logs || []).map(l => ({
+          round: l.round,
+          speaker: l.speaker,
+          role: l.role,
+          text: (l.text || '').length > 180 ? (l.text || '').slice(0, 180) + '...' : (l.text || '')
+        }));
+        jsonStr = JSON.stringify(sharePayload);
+        compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
+        fullUrl = `${baseUrl}?share=${compressed}`;
+      }
+
+      return fullUrl;
     } catch (e) {
-      console.error('Share URL generation error:', e);
+      console.error('Share URL compression failed:', e);
       return null;
     }
   }
 
+  function generateShareUrl() {
+    const topic = (topicInput?.value || '').trim();
+    if (!finalReportText && fullDebateLog.length === 0) return null;
+
+    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
+    return compressSharePayloadToUrl(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
+  }
+
   function generateShareUrlFromItem(item) {
     if (!item) return null;
-    const sharePayload = {
-      topic: item.title || '공유된 히스토리 팩트체크 문서',
-      date: item.date || new Date().toLocaleString('ko-KR'),
-      rounds: item.rounds || 1,
-      consensusReport: item.consensusReport || '',
-      debateHistory: item.debateHistory || '',
-      logs: item.logs || [],
-      attachedFilesMeta: item.attachedFilesMeta || []
-    };
-
-    try {
-      const jsonStr = JSON.stringify(sharePayload);
-      const compressed = window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(encodeURIComponent(jsonStr));
-      const baseUrl = window.location.origin + window.location.pathname;
-      return `${baseUrl}?share=${compressed}`;
-    } catch (e) {
-      console.error('History Share URL generation error:', e);
-      return null;
-    }
+    return compressSharePayloadToUrl(item.title, item.date, item.rounds, item.consensusReport, item.logs, item.attachedFilesMeta);
   }
 
   function copyShareUrlToClipboard() {
@@ -1411,29 +1420,36 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!jsonStr) {
         jsonStr = decodeURIComponent(atob(shareCode));
       }
-      const data = JSON.parse(jsonStr);
+      const raw = JSON.parse(jsonStr);
 
-      if (data && data.topic) {
-        console.log('🔗 Loaded Shared Session:', data);
-        if (topicInput) topicInput.value = data.topic;
+      // Support both compact keys (t, d, c, l, f) and legacy keys
+      const topic = raw.t || raw.topic;
+      const date = raw.d || raw.date || '최근';
+      const consensusReport = raw.c || raw.consensusReport;
+      const logs = raw.l || raw.logs || [];
+      const filesMeta = raw.f || raw.attachedFilesMeta || [];
+
+      if (topic || consensusReport) {
+        console.log('🔗 Loaded Shared Session:', { topic, date, logsCount: logs.length });
+        if (topicInput) topicInput.value = topic || '';
         if (debateStream) debateStream.innerHTML = '';
         if (sharedViewBanner) sharedViewBanner.classList.remove('hidden');
-        if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${data.topic}" | 생성일: ${data.date || '최근'}`;
+        if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${topic || '공유 문서'}" | 생성일: ${date}`;
 
-        if (data.logs && data.logs.length > 0) {
-          data.logs.forEach(turn => {
+        if (logs && logs.length > 0) {
+          logs.forEach(turn => {
             if (turn.round !== 'Consensus') {
               const stanceClass = getStanceClass(turn.speaker);
-              renderTurnCard(turn.round, turn.speaker, turn.role, stanceClass, turn.text, data.attachedFilesMeta);
+              renderTurnCard(turn.round, turn.speaker, turn.role, stanceClass, turn.text, filesMeta);
             }
           });
         }
 
-        if (data.consensusReport) {
-          finalReportText = data.consensusReport;
-          fullDebateLog = data.logs || [];
+        if (consensusReport) {
+          finalReportText = consensusReport;
+          fullDebateLog = logs;
           if (refereeCard) refereeCard.classList.remove('hidden');
-          if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(data.consensusReport);
+          if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(consensusReport);
         }
 
         if (btnShareSession) btnShareSession.disabled = false;
