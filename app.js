@@ -1029,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   },
                   body: JSON.stringify({
                     model: orModel,
-                    max_tokens: 1200,
+                    max_tokens: 4096,
                     temperature: 0.6,
                     messages: [
                       { role: 'system', content: cleanClientText(sysPrompt) },
@@ -1069,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: headers,
             body: JSON.stringify({
               model: m,
-              max_tokens: 1200,
+              max_tokens: 4096,
               temperature: 0.6,
               presence_penalty: 0.2,
               frequency_penalty: 0.2,
@@ -1439,12 +1439,12 @@ document.addEventListener('DOMContentLoaded', () => {
       t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
       c: compactReport,
-      // Include speaker/role + truncated text (first 120 chars) per turn so logs render
+      // Include speaker/role + text (first 1500 chars) per turn so logs render without cut-off
       l: (logs || []).map(l => ({
         r: l.round,
         s: l.speaker,
         k: l.role,
-        x: l.text ? l.text.substring(0, 120) + (l.text.length > 120 ? '…' : '') : ''
+        x: l.text ? l.text.substring(0, 1500) + (l.text.length > 1500 ? '…' : '') : ''
       }))
     };
 
