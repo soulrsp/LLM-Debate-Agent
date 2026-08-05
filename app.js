@@ -823,6 +823,28 @@ document.addEventListener('DOMContentLoaded', () => {
     return escaped.replace(/\n/g, '<br>');
   }
 
+  // Format Final Referee Consensus Report with Eye-Catching Conclusion Highlight Box
+  function formatRefereeReportWithHighlight(text) {
+    if (!text) return '';
+    let formatted = formatTextWithReferences(text);
+
+    // Regex to match "종합 검증 결론", "최종 결론", "종합 결론", "Consensus Conclusion" sections
+    const conclusionRegex = /(?:<br>|\n|^)\s*(?:[#*]*\s*)?(?:👑|📌|💡|✅)?\s*(?:[0-9IVX]+\.\s*)?(종합\s*검증\s*결론|최종\s*결론|종합\s*결론|팩트체크\s*결론|Consensus\s*Conclusion)[\s\S]*$/i;
+    
+    // Check if report has a conclusion header paragraph
+    const headerMatch = formatted.match(/(?:<br>|\n|^)\s*(?:[#*]*\s*)?(?:👑|📌|💡|✅)?\s*(?:[0-9IVX]+\.\s*)?(종합\s*검증\s*결론|최종\s*결론|종합\s*결론|팩트체크\s*결론|Consensus\s*Conclusion)/i);
+    
+    if (headerMatch) {
+      const splitIdx = headerMatch.index;
+      const bodyPart = formatted.substring(0, splitIdx);
+      const conclusionPart = formatted.substring(splitIdx).replace(/^(?:<br>|\n)+/, '');
+      
+      return `${bodyPart}<div class="consensus-highlight-box"><div class="consensus-highlight-title">👑 ${headerMatch[1]} &amp; 핵심 요약</div><div class="consensus-highlight-content">${conclusionPart}</div></div>`;
+    }
+
+    return formatted;
+  }
+
   // Helper: Trigger browser download for generated Blob text data
   function downloadBlobFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
     try {
@@ -1472,7 +1494,7 @@ document.addEventListener('DOMContentLoaded', () => {
               reportDownloadToolbarHtml += `</div>`;
             }
 
-            refereeBody.innerHTML = reportOutput.replace(/\n/g, '<br>') + reportDownloadToolbarHtml;
+            refereeBody.innerHTML = formatRefereeReportWithHighlight(reportOutput) + reportDownloadToolbarHtml;
 
             if (reportItems.length > 0) {
               const btnReportDownloads = refereeBody.querySelectorAll('.btn-report-download');
@@ -1765,7 +1787,43 @@ document.addEventListener('DOMContentLoaded', () => {
           refereeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       }
-      if (refereeBody) refereeBody.innerHTML = formatTextWithReferences(consensusReport);
+      if (refereeBody) {
+        const reportItems = extractDownloadableItems(consensusReport);
+        let reportDownloadToolbarHtml = '';
+        if (reportItems.length > 0) {
+          reportDownloadToolbarHtml = `
+            <div class="turn-download-toolbar" style="margin-top: 1.2rem;">
+              <div class="download-toolbar-title">📥 보고서 내 생성 자료 및 파일 다운로드 (${reportItems.length}개)</div>
+          `;
+          reportItems.forEach((item, idx) => {
+            reportDownloadToolbarHtml += `
+              <button type="button" class="btn-card-download btn-report-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+                <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+              </button>
+            `;
+          });
+          reportDownloadToolbarHtml += `</div>`;
+        }
+
+        refereeBody.innerHTML = formatRefereeReportWithHighlight(consensusReport) + reportDownloadToolbarHtml;
+
+        if (reportItems.length > 0) {
+          const btnReportDownloads = refereeBody.querySelectorAll('.btn-report-download');
+          btnReportDownloads.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+              const item = reportItems[idx];
+              if (!item) return;
+
+              if (item.type === 'code_block') {
+                downloadBlobFile(item.filename, item.content);
+              } else if (item.type === 'external_url') {
+                window.open(item.url, '_blank');
+              }
+            });
+          });
+        }
+      }
     }
 
     if (btnShareSession) btnShareSession.disabled = false;
