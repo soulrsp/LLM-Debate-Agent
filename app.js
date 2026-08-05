@@ -1162,6 +1162,10 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Starting Fact-Check Pipeline!');
     console.log('Active configured & enabled keys:', activeLineup.map(p => p.providerKey));
 
+    // Detect if local Node.js server is available (localhost/127.0.0.1)
+    // On GitHub Pages (static hosting), skip server API calls entirely to avoid 405 errors
+    const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+
     try {
       for (let r = 1; r <= totalRounds; r++) {
         if (!isDebating) break;
@@ -1177,32 +1181,34 @@ document.addEventListener('DOMContentLoaded', () => {
           let textOutput = '';
           let isSuccess = false;
 
-          // 1. Try Local Server Endpoint first
-          try {
-            const response = await fetch('/api/debate/step', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                providerKey: speaker.providerKey,
-                modelName: speaker.modelName,
-                role: speaker.roleKey,
-                topic: topic,
-                roundNumber: r,
-                debateHistory: debateHistory,
-                referenceSessions: activeReferenceSessions,
-                attachedFiles: attachedFiles,
-                apiKeys: apiKeys
-              })
-            });
-            if (response.ok) {
-              const data = await response.json();
-              if (data && data.success && data.text) {
-                textOutput = data.text;
-                isSuccess = true;
+          // 1. Try Local Server Endpoint first (only on localhost — skip on GitHub Pages to avoid 405 errors)
+          if (isLocalServer) {
+            try {
+              const response = await fetch('/api/debate/step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  providerKey: speaker.providerKey,
+                  modelName: speaker.modelName,
+                  role: speaker.roleKey,
+                  topic: topic,
+                  roundNumber: r,
+                  debateHistory: debateHistory,
+                  referenceSessions: activeReferenceSessions,
+                  attachedFiles: attachedFiles,
+                  apiKeys: apiKeys
+                })
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.success && data.text) {
+                  textOutput = data.text;
+                  isSuccess = true;
+                }
               }
+            } catch(e) {
+              // Local server not available
             }
-          } catch(e) {
-            // Local server not available (e.g. GitHub Pages)
           }
 
           // 2. Direct Browser REST API Fallback if local server failed or unavailable
@@ -1243,25 +1249,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let reportOutput = '';
-        try {
-          const judgeRes = await fetch('/api/debate/judge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              topic: topic,
-              debateHistory: debateHistory,
-              referenceSessions: activeReferenceSessions,
-              attachedFiles: attachedFiles,
-              apiKeys: apiKeys
-            })
-          });
-          if (judgeRes.ok) {
-            const judgeData = await judgeRes.json();
-            if (judgeData && judgeData.success && judgeData.text) {
-              reportOutput = judgeData.text;
+        // Try server judge only on localhost
+        if (isLocalServer) {
+          try {
+            const judgeRes = await fetch('/api/debate/judge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                topic: topic,
+                debateHistory: debateHistory,
+                referenceSessions: activeReferenceSessions,
+                attachedFiles: attachedFiles,
+                apiKeys: apiKeys
+              })
+            });
+            if (judgeRes.ok) {
+              const judgeData = await judgeRes.json();
+              if (judgeData && judgeData.success && judgeData.text) {
+                reportOutput = judgeData.text;
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
 
         if (!reportOutput) {
           reportOutput = await executeDirectJudge(topic, debateHistory, activeReferenceSessions, attachedFiles, apiKeys);
