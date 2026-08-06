@@ -1685,16 +1685,20 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('llm_debate_share_' + timestampId, JSON.stringify(rawPayload));
     } catch (e) {}
 
-    // 1. Try Firebase Firestore Cloud DB (Guarantees 100% Uncut Data Across ALL Devices & Smartphones)
+    // 1. Try Firebase Firestore Cloud DB with 1.5s Fast Timeout Guarantee
     if (firebaseDb) {
       try {
-        const docRef = await firebaseDb.collection('shares').add(rawPayload);
+        const firestorePromise = firebaseDb.collection('shares').add(rawPayload);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Firebase DB response timeout')), 1500)
+        );
+        const docRef = await Promise.race([firestorePromise, timeoutPromise]);
         if (docRef && docRef.id) {
           console.log('🔥 Saved payload to Firebase Cloud DB with ID:', docRef.id);
           return `${baseUrl}?share=f_${docRef.id}`;
         }
       } catch (err) {
-        console.warn('Firebase Cloud DB save notice (falling back to local):', err);
+        console.warn('Firebase Cloud DB save notice (fast fallback engaged):', err.message);
       }
     }
 
