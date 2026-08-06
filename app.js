@@ -1730,52 +1730,68 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${baseUrl}?share=${timestampId}`;
   }
 
-  async function copyCurrentShareUrl() {
-    const topic = (topicInput?.value || '').trim();
-    if (!finalReportText && fullDebateLog.length === 0) {
-      alert('공유할 교차 검증 대화록이 없습니다. 검증을 먼저 진행해 주세요!');
-      return;
-    }
-    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
-    const url = await generateShareUrlAsync(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
+  // Helper: Copy URL to Clipboard with Guaranteed UI Feedback (Alert + Button text animation)
+  async function copyUrlToClipboard(url, btnElement = null) {
     if (!url) {
       alert('공유 링크를 생성하지 못했습니다.');
       return;
     }
 
+    let isSuccess = false;
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => {
-        alert(`🔗 팩트체크 공유 링크가 클립보드에 복사되었습니다! 🎉\n\n[생성된 공유 링크]:\n${url}`);
-      }).catch(() => {
-        prompt('아래 공유 링크를 복사하세요:', url);
-      });
-    } else {
-      prompt('아래 공유 링크를 복사하세요:', url);
+      try {
+        await navigator.clipboard.writeText(url);
+        isSuccess = true;
+      } catch (err) {
+        console.warn('Clipboard writeText failed, falling back to prompt:', err);
+      }
     }
+
+    if (btnElement) {
+      const origHtml = btnElement.innerHTML;
+      btnElement.innerHTML = `<span class="icon">✓</span> 복사 완료!`;
+      btnElement.style.borderColor = '#10b981';
+      btnElement.style.color = '#34d399';
+      setTimeout(() => {
+        btnElement.innerHTML = origHtml;
+        btnElement.style.borderColor = '';
+        btnElement.style.color = '';
+      }, 2500);
+    }
+
+    if (isSuccess) {
+      alert(`🔗 팩트체크 공유 링크가 클립보드에 복사되었습니다! 🎉\n\n[생성된 클라우드 공유 링크]:\n${url}`);
+    } else {
+      prompt('아래 공유 링크를 선택하여 복사(Ctrl+C / 롱터치)하세요:', url);
+    }
+  }
+
+  async function copyCurrentShareUrl(e) {
+    const topic = (topicInput?.value || '').trim();
+    if (!finalReportText && fullDebateLog.length === 0) {
+      alert('공유할 교차 검증 대화록이 없습니다. 검증을 먼저 진행해 주세요!');
+      return;
+    }
+    const targetBtn = e ? e.currentTarget : null;
+    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
+    const url = await generateShareUrlAsync(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
+    copyUrlToClipboard(url, targetBtn);
   }
 
   if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
   if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
 
   if (btnShareDetailHistory) {
-    btnShareDetailHistory.addEventListener('click', async () => {
+    btnShareDetailHistory.addEventListener('click', async (e) => {
       if (!selectedHistoryItem) {
-        alert('공유할 히스토리 문서를 선택해 주세요!');
+        alert('공유할 히스토리 문서를 먼저 선택해 주세요!');
         return;
       }
       const item = selectedHistoryItem;
+      const targetBtn = e.currentTarget;
       const url = await generateShareUrlAsync(item.title, item.date, item.rounds, item.consensusReport, item.logs, item.attachedFilesMeta);
-      if (url) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(url).then(() => {
-            alert(`🔗 히스토리 문서 공유 링크가 클립보드에 복사되었습니다! 🎉\n\n[생성된 공유 링크]:\n${url}`);
-          }).catch(() => {
-            prompt('아래 공유 링크를 복사하세요:', url);
-          });
-        } else {
-          prompt('아래 공유 링크를 복사하세요:', url);
-        }
-      }
+      copyUrlToClipboard(url, targetBtn);
     });
   }
 
