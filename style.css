@@ -1677,3 +1677,142 @@ input[type="range"] {
   border-color: rgba(56, 189, 248, 0.5);
   background: rgba(56, 189, 248, 0.08);
 }
+
+/* ==========================================================================
+   📱 Mobile Responsive Design System (Mobile-First Optimization)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  body {
+    padding: 0.5rem;
+    overflow-x: hidden;
+  }
+
+  .app-container {
+    max-width: 100%;
+    padding: 0 0.25rem;
+  }
+
+  /* Header Optimization */
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 1.2rem;
+    text-align: center;
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 130px;
+    padding: 0.65rem 0.8rem;
+    font-size: 0.85rem;
+    justify-content: center;
+  }
+
+  /* Main Grid 1-Column Layout */
+  .main-container {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .config-panel, .arena-panel {
+    padding: 1.2rem;
+  }
+
+  /* Action Buttons & Inputs Touch Target Sizes */
+  .btn, input, select, textarea {
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .btn-large {
+    min-height: 50px;
+    font-size: 1.05rem;
+  }
+
+  /* History Modal Mobile Optimization */
+  .modal-content {
+    width: 95%;
+    max-width: 100%;
+    padding: 1.2rem;
+    margin: 0.5rem;
+    max-height: 94vh;
+  }
+
+  .history-modal-content {
+    max-width: 100% !important;
+    height: 94vh !important;
+  }
+
+  .history-split-body {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    overflow-y: auto;
+  }
+
+  .history-left-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--border-glass);
+    padding-right: 0;
+    padding-bottom: 1rem;
+    max-height: 280px;
+  }
+
+  .history-list-container {
+    max-height: 220px;
+  }
+
+  .history-item-title-box {
+    max-width: 180px;
+  }
+
+  .history-item-title {
+    max-width: 170px;
+  }
+
+  /* Turn Cards & Reports Mobile Layout */
+  .turn-card {
+    padding: 1rem;
+  }
+
+  .speaker-info {
+    gap: 0.5rem;
+  }
+
+  .speaker-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+
+  .consensus-highlight-box {
+    padding: 0.9rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  /* Floating Downloads & Code Blocks Mobile Handling */
+  .turn-download-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-card-download {
+    width: 100%;
+    justify-content: center;
+  }
+
+  pre {
+    max-width: 100%;
+    overflow-x: auto;
+    font-size: 0.82rem;
+  }
+}
