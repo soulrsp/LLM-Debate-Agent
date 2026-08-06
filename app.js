@@ -1221,20 +1221,25 @@ document.addEventListener('DOMContentLoaded', () => {
             headers['HTTP-Referer'] = window.location.href;
             headers['X-Title'] = 'LLM Fact-Check Arena';
           }
+          const requestBody = {
+            model: m,
+            max_tokens: providerKey === 'groq' ? 3000 : 8192,
+            temperature: 0.6,
+            messages: [
+              { role: 'system', content: cleanClientText(sysPrompt) },
+              { role: 'user', content: cleanClientText(userPrompt) }
+            ]
+          };
+
+          if (providerKey !== 'groq') {
+            requestBody.presence_penalty = 0.2;
+            requestBody.frequency_penalty = 0.2;
+          }
+
           const res = await fetch(`${config.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify({
-              model: m,
-              max_tokens: 8192,
-              temperature: 0.6,
-              presence_penalty: 0.2,
-              frequency_penalty: 0.2,
-              messages: [
-                { role: 'system', content: cleanClientText(sysPrompt) },
-                { role: 'user', content: cleanClientText(userPrompt) }
-              ]
-            })
+            body: JSON.stringify(requestBody)
           });
           if (res.ok) {
             const data = await res.json();
@@ -1244,34 +1249,41 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {}
       }
 
-      // If Groq rate-limited (429) or all candidates failed, fallback to OpenRouter's Llama 3.3 Free if key exists
+      // If Groq rate-limited (429/413) or all candidates failed, fallback to OpenRouter Free if key exists
       if (providerKey === 'groq' && apiKeys['openrouter'] && apiKeys['openrouter'].trim()) {
-        try {
-          const openrouterKey = apiKeys['openrouter'].trim();
-          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${openrouterKey}`,
-              'HTTP-Referer': window.location.href,
-              'X-Title': 'LLM Fact-Check Arena'
-            },
-            body: JSON.stringify({
-              model: 'meta-llama/llama-3.3-70b-instruct:free',
-              max_tokens: 8192,
-              temperature: 0.6,
-              messages: [
-                { role: 'system', content: cleanClientText(sysPrompt) },
-                { role: 'user', content: cleanClientText(userPrompt) }
-              ]
-            })
-          });
-          if (orRes.ok) {
-            const orData = await orRes.json();
-            const txt = cleanClientText(orData.choices?.[0]?.message?.content);
-            if (txt && !isDegenerateClientLoop(txt)) return txt;
-          }
-        } catch(e) {}
+        const orCandidates = [
+          'meta-llama/llama-3.3-70b-instruct',
+          'openrouter/auto',
+          'google/gemma-2-9b-it:free'
+        ];
+        for (const orM of orCandidates) {
+          try {
+            const openrouterKey = apiKeys['openrouter'].trim();
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openrouterKey}`,
+                'HTTP-Referer': window.location.href,
+                'X-Title': 'LLM Fact-Check Arena'
+              },
+              body: JSON.stringify({
+                model: orM,
+                max_tokens: 4096,
+                temperature: 0.6,
+                messages: [
+                  { role: 'system', content: cleanClientText(sysPrompt) },
+                  { role: 'user', content: cleanClientText(userPrompt) }
+                ]
+              })
+            });
+            if (orRes.ok) {
+              const orData = await orRes.json();
+              const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+              if (txt && !isDegenerateClientLoop(txt)) return txt;
+            }
+          } catch(e) {}
+        }
       }
 
       throw new Error(`${config.name} 통신 응답 실패`);
