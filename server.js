@@ -181,20 +181,25 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   let lastError = null;
   for (const currentModel of modelsToTry) {
     try {
+      const reqBody = {
+        model: currentModel,
+        max_tokens: baseUrl.includes('groq') ? 3000 : 8192,
+        temperature: 0.6,
+        messages: [
+          { role: 'system', content: sanitizedSys },
+          { role: 'user', content: sanitizedUser }
+        ]
+      };
+
+      if (!baseUrl.includes('groq')) {
+        reqBody.presence_penalty = 0.2;
+        reqBody.frequency_penalty = 0.2;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify({
-          model: currentModel,
-          max_tokens: 8192,
-          temperature: 0.6,
-          presence_penalty: 0.2,
-          frequency_penalty: 0.2,
-          messages: [
-            { role: 'system', content: sanitizedSys },
-            { role: 'user', content: sanitizedUser }
-          ]
-        })
+        body: JSON.stringify(reqBody)
       });
 
       if (!response.ok) {
