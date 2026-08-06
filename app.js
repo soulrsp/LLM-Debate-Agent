@@ -1650,11 +1650,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 2. Static Site Fallback (GitHub Pages): LZString Compressed URL
-    // Guarantees 100% cross-device data restoration on static hosting (GitHub Pages)
+    // 2. Static Site Fallback (GitHub Pages): Ultra-Lean Compressed URL
+    // Guarantees URL length stays strictly under 1800 characters to prevent "URL Too Long" errors
     let compactReport = (consensusReport || '').trim();
-    if (compactReport.length > 3000) {
-      compactReport = compactReport.slice(0, 3000) + '\n\n*(보고서 일부 축약)*';
+    if (compactReport.length > 450) {
+      compactReport = compactReport.slice(0, 450) + '\n\n*(이하 주요 팩트체크 요약)*';
     }
     compactReport = compactReport.replace(/\n{3,}/g, '\n\n');
 
@@ -1662,21 +1662,40 @@ document.addEventListener('DOMContentLoaded', () => {
       t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
       c: compactReport,
-      // Include speaker, role and text so logs render across devices
+      // Lightweight log entries (~80 chars text snippet per turn)
       l: (logs || []).map(l => ({
         r: l.round,
         s: l.speaker,
         k: l.role,
-        x: l.text ? l.text.substring(0, 2000) + (l.text.length > 2000 ? '…' : '') : ''
+        x: l.text ? l.text.substring(0, 80) + (l.text.length > 80 ? '…' : '') : ''
       }))
     };
 
     try {
-      const jsonStr = JSON.stringify(summaryPayload);
-      const compressed = window.LZString
+      let jsonStr = JSON.stringify(summaryPayload);
+      let compressed = window.LZString
         ? window.LZString.compressToEncodedURIComponent(jsonStr)
         : btoa(encodeURIComponent(jsonStr));
-      return `${baseUrl}?share=${compressed}`;
+      
+      let finalUrl = `${baseUrl}?share=${compressed}`;
+
+      // If compressed URL is still too long (> 1800 chars), perform strict fail-safe trim
+      if (finalUrl.length > 1800) {
+        summaryPayload.c = compactReport.slice(0, 250) + '…';
+        summaryPayload.l = (logs || []).map(l => ({
+          r: l.round,
+          s: l.speaker,
+          k: l.role,
+          x: l.text ? l.text.substring(0, 40) + '…' : ''
+        }));
+        jsonStr = JSON.stringify(summaryPayload);
+        compressed = window.LZString
+          ? window.LZString.compressToEncodedURIComponent(jsonStr)
+          : btoa(encodeURIComponent(jsonStr));
+        finalUrl = `${baseUrl}?share=${compressed}`;
+      }
+
+      return finalUrl;
     } catch (err) {
       return `${baseUrl}?share=${shortId}`; // Fallback to localStorage-based short URL
     }
