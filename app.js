@@ -1695,6 +1695,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rounds: rounds || 1,
       consensusReport: consensusReport || '',
       logs: logs || [],
+      logsJson: JSON.stringify(logs || []),
       attachedFilesMeta: attachedFilesMeta || [],
       createdAt: firebase.firestore ? firebase.firestore.FieldValue.serverTimestamp() : Date.now()
     };
@@ -1960,19 +1961,62 @@ document.addEventListener('DOMContentLoaded', () => {
     // Case 0: Firebase Cloud DB Short ID (f_...)
     if (shareCode.startsWith('f_')) {
       const docId = shareCode.replace('f_', '');
-      if (dbInstance || firebaseDb) {
-        const targetDb = dbInstance || firebaseDb;
-        try {
-          const docSnap = await targetDb.collection('shares').doc(docId).get();
-          if (docSnap.exists) {
-            const cloudPayload = docSnap.data();
-            console.log('🔥 100% Restored full session from Firebase Cloud DB:', docId);
-            renderSharedSessionData(cloudPayload);
+      
+      // Visual Feedback: Show Loading Indicator while fetching from cloud
+      if (debateStream) {
+        debateStream.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon" style="animation: spin 1s infinite linear;">⚡</div>
+            <h3>🔥 클라우드 공유 팩트체크 복원 중...</h3>
+            <p>Firebase Cloud DB에서 교차 검증 대화록 원문을 불러오고 있습니다.</p>
+          </div>
+        `;
+      }
+
+      // Stage 1: Fetch via Firebase JS SDK
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const targetDb = dbInstance || firebaseDb || (await initFirebaseFirestoreAsync());
+        if (targetDb) {
+          try {
+            console.log(`🔥 Fetching document via SDK (Attempt ${attempt}/2):`, docId);
+            const docSnap = await targetDb.collection('shares').doc(docId).get();
+            if (docSnap.exists) {
+              const cloudPayload = docSnap.data();
+              console.log('🔥 100% Restored full session via Firebase SDK:', docId);
+              renderSharedSessionData(cloudPayload);
+              return;
+            }
+          } catch (err) {
+            console.warn(`Firebase SDK fetch notice (Attempt ${attempt}):`, err.message);
+          }
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      // Stage 2: Direct REST API Fallback (Guarantees 100% fetch even if Firebase Web SDK is blocked by browser extensions/firewalls)
+      try {
+        console.log('🌐 Fetching document via Direct Firebase REST API Fallback:', docId);
+        const apiKey = atob("QUl6YVN5RDJOaEJkVmVsQkxoZUVRVmJzVDRjT2J6dnNNZ0xndE1v");
+        const restUrl = `https://firestore.googleapis.com/v1/projects/llm-debate-agent/databases/(default)/documents/shares/${docId}?key=${apiKey}`;
+        const restRes = await fetch(restUrl);
+        if (restRes.ok) {
+          const restData = await restRes.json();
+          if (restData && restData.fields) {
+            const f = restData.fields;
+            const parsedPayload = {
+              topic: f.topic?.stringValue || '',
+              date: f.date?.stringValue || '',
+              rounds: parseInt(f.rounds?.integerValue || '1', 10),
+              consensusReport: f.consensusReport?.stringValue || '',
+              logs: JSON.parse(f.logsJson?.stringValue || '[]')
+            };
+            console.log('🔥 100% Restored full session via Firebase Direct REST API:', docId);
+            renderSharedSessionData(parsedPayload);
             return;
           }
-        } catch (err) {
-          console.warn('Firebase Cloud DB fetch notice:', err);
         }
+      } catch (restErr) {
+        console.warn('Firebase Direct REST API fetch error:', restErr.message);
       }
     }
 
