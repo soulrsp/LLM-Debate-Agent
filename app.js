@@ -1611,7 +1611,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
 
-  // Timestamp-Based Ultra-Short Share URL Generator (100% Uncut Text & Short URL Guarantee)
+  // Initialize Firebase Firestore Cloud DB Integration (Official Project: llm-debate-agent)
+  let firebaseDb = null;
+  function initFirebaseFirestore() {
+    if (window.firebase && !firebaseDb) {
+      try {
+        const storedFbConfig = localStorage.getItem('llm_debate_firebase_config');
+        let fbConfig = null;
+        if (storedFbConfig) {
+          try { fbConfig = JSON.parse(storedFbConfig); } catch(e) {}
+        }
+        // Official Firebase App configuration for instant 100% cross-device short sharing
+        if (!fbConfig) {
+          fbConfig = {
+            apiKey: "AIzaSyD2NhBdVelBLheEQVbsT4cObzvsMgLgtMo",
+            authDomain: "llm-debate-agent.firebaseapp.com",
+            projectId: "llm-debate-agent",
+            storageBucket: "llm-debate-agent.firebasestorage.app",
+            messagingSenderId: "119510377719",
+            appId: "1:119510377719:web:2fe1a6eb61df0fef1adff2",
+            measurementId: "G-VGCSC2RZTC"
+          };
+        }
+        if (!firebase.apps.length) {
+          firebase.initializeApp(fbConfig);
+        }
+        firebaseDb = firebase.firestore();
+        console.log('🔥 Firebase Firestore Cloud DB (llm-debate-agent) Initialized successfully!');
+      } catch (err) {
+        console.warn('Firebase Firestore initialization notice:', err.message);
+      }
+    }
+  }
+  initFirebaseFirestore();
+
+  // Firebase Cloud DB Ultra-Short Share URL Generator (100% Full Uncut Data Cross-Device)
   async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
     const baseUrl = window.location.origin + window.location.pathname;
     const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
@@ -1624,7 +1658,8 @@ document.addEventListener('DOMContentLoaded', () => {
       rounds: rounds || 1,
       consensusReport: consensusReport || '',
       logs: logs || [],
-      attachedFilesMeta: attachedFilesMeta || []
+      attachedFilesMeta: attachedFilesMeta || [],
+      createdAt: firebase.firestore ? firebase.firestore.FieldValue.serverTimestamp() : Date.now()
     };
 
     // Save full uncut session data in LocalStorage immediately
@@ -1632,7 +1667,20 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('llm_debate_share_' + timestampId, JSON.stringify(rawPayload));
     } catch (e) {}
 
-    // 1. Local Server mode: save payload to server share store and return short URL
+    // 1. Try Firebase Firestore Cloud DB (Guarantees 100% Uncut Data Across ALL Devices & Smartphones)
+    if (firebaseDb) {
+      try {
+        const docRef = await firebaseDb.collection('shares').add(rawPayload);
+        if (docRef && docRef.id) {
+          console.log('🔥 Saved payload to Firebase Cloud DB with ID:', docRef.id);
+          return `${baseUrl}?share=f_${docRef.id}`;
+        }
+      } catch (err) {
+        console.warn('Firebase Cloud DB save notice (falling back to local):', err);
+      }
+    }
+
+    // 2. Local Server mode: save payload to server share store and return short URL
     if (isLocalServer) {
       try {
         const res = await fetch('/api/share/save', {
@@ -1649,35 +1697,24 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
 
-    // 2. GitHub Pages (Static Hosting) mode:
-    // Create ultra-short timestamp URL with lightweight LZString payload so URL is short AND text is uncut
-    const summaryPayload = {
-      id: timestampId,
-      t: topic || '공유 팩트체크',
-      d: date || new Date().toLocaleString('ko-KR'),
-      c: (consensusReport || '').trim(),
-      l: (logs || []).map(l => ({
-        r: l.round,
-        s: l.speaker,
-        k: l.role,
-        x: l.text || ''
-      }))
-    };
-
+    // 3. Fallback LZString Compressed URL
     try {
+      const summaryPayload = {
+        id: timestampId,
+        t: topic || '공유 팩트체크',
+        d: date || new Date().toLocaleString('ko-KR'),
+        c: (consensusReport || '').trim(),
+        l: (logs || []).map(l => ({ r: l.round, s: l.speaker, k: l.role, x: l.text || '' }))
+      };
       const jsonStr = JSON.stringify(summaryPayload);
       const compressed = window.LZString
         ? window.LZString.compressToEncodedURIComponent(jsonStr)
         : btoa(encodeURIComponent(jsonStr));
 
-      // Return clean, short timestamp URL if compressed string fits within browser limits (< 1500 chars)
       const fullCompressedUrl = `${baseUrl}?share=${compressed}`;
-      if (fullCompressedUrl.length < 1600) {
-        return fullCompressedUrl;
-      }
+      if (fullCompressedUrl.length < 1600) return fullCompressedUrl;
     } catch (err) {}
 
-    // Fallback: Extremely clean timestamp ID URL (e.g. https://domain/?share=t_1773245890)
     return `${baseUrl}?share=${timestampId}`;
   }
 
@@ -1834,6 +1871,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!shareCode) return;
 
     console.log('🔍 Shared URL param detected:', shareCode.substring(0, 30));
+
+    // Case 0: Firebase Cloud DB Short ID (f_...)
+    if (shareCode.startsWith('f_')) {
+      const docId = shareCode.replace('f_', '');
+      if (firebaseDb) {
+        try {
+          const docSnap = await firebaseDb.collection('shares').doc(docId).get();
+          if (docSnap.exists) {
+            const cloudPayload = docSnap.data();
+            console.log('🔥 100% Restored full session from Firebase Cloud DB:', docId);
+            renderSharedSessionData(cloudPayload);
+            return;
+          }
+        } catch (err) {
+          console.warn('Firebase Cloud DB fetch notice:', err);
+        }
+      }
+    }
 
     // Case 1: Short Share Vault ID (s_... or t_...)
     if (shareCode.startsWith('s_') || shareCode.startsWith('t_')) {
