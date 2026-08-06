@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailReportText = document.getElementById('detail-report-text');
   const detailTranscriptList = document.getElementById('detail-transcript-list');
   const btnSetAsReference = document.getElementById('btn-set-as-reference');
+  const btnShareDetailHistory = document.getElementById('btn-share-detail-history');
   const btnDownloadDetailDocx = document.getElementById('btn-download-detail-docx');
   const btnDeleteDetailItem = document.getElementById('btn-delete-detail-item');
 
@@ -1618,7 +1619,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Share Conversation via URL Link (?share=...) Feature
   const btnShareSession = document.getElementById('btn-share-session');
   const btnShareReport = document.getElementById('btn-share-report');
-  const btnShareDetailHistory = document.getElementById('btn-share-detail-history');
   const sharedViewBanner = document.getElementById('shared-view-banner');
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
