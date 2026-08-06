@@ -420,17 +420,19 @@ async function executeProviderCall(providerKey, apiKey, roleKey, topic, roundNum
   if (!config) throw new Error(`Unknown provider: ${providerKey}`);
 
   const currentRole = roleKey || config.roleKey;
+  const sysKoreanRule = "\n\n[언어 출력 강제 규칙]: 답변은 반드시 100% 한글(한국어)로만 작성하세요. 한자(漢字, 中文)나 일본어 문자는 절대로 사용하지 마시고, 모든 전문용어와 고유명사는 반드시 한국어(한글)로 번역하거나 한글 표기로 작성하세요.";
+
   const systemPrompts = {
-    'FactFinder': `당신은 최신 데이터와 정확한 팩트를 추출하는 전문 분석 AI(${config.name})입니다. 질문 '${topic}'에 대해 추측이나 환각(Hallucination)을 철저히 배제하고, 객관적으로 검증 가능한 실증 데이터와 팩트만을 제시하세요. 한국어로 작성하세요.`,
-    'CrossAuditor': `당신은 엄격한 팩트체커이자 교차 검증 AI(${config.name})입니다. 이전 발언들에 포함된 정보 중 숫자의 오차, 근거 없는 추측, 환각(Hallucination), 논리적 오류가 있는지 정밀 감정하고 교정하세요. 한국어로 작성하세요.`,
-    'Synthesizer': `당신은 지식 합성 및 종합 검증 AI(${config.name})입니다. 공유된 정보를 바탕으로 상충되는 주장을 조정하고, 누락된 핵심 맥락을 채워 정제된 신뢰 지식을 완성하세요. 한국어로 작성하세요.`
+    'FactFinder': `당신은 최신 데이터와 정확한 팩트를 추출하는 전문 분석 AI(${config.name})입니다. 질문 '${topic}'에 대해 추측이나 환각(Hallucination)을 철저히 배제하고, 객관적으로 검증 가능한 실증 데이터와 팩트만을 제시하세요.${sysKoreanRule}`,
+    'CrossAuditor': `당신은 엄격한 팩트체커이자 교차 검증 AI(${config.name})입니다. 이전 발언들에 포함된 정보 중 숫자의 오차, 근거 없는 추측, 환각(Hallucination), 논리적 오류가 있는지 정밀 감정하고 교정하세요.${sysKoreanRule}`,
+    'Synthesizer': `당신은 지식 합성 및 종합 검증 AI(${config.name})입니다. 공유된 정보를 바탕으로 상충되는 주장을 조정하고, 누락된 핵심 맥락을 채워 정제된 신뢰 지식을 완성하세요.${sysKoreanRule}`
   };
 
   let userPrompt = `[조사/검증 주제]: ${topic}\n[진행 라운드]: Round ${roundNumber}`;
   userPrompt += buildFilesPrompt(attachedFiles, attachedFile, 6000);
   userPrompt += `\n\n[이전 모델들의 정보 공유 및 교차 검증 기록]:\n${debateHistory || '(첫 번째 정보 탐색 라운드입니다)'}`;
   userPrompt += buildMultiReferencePrompt(referenceSessions, referenceSession);
-  userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 제시하세요.`;
+  userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 100% 한글(한국어)로 제시하세요.`;
 
   const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
 
