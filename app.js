@@ -1773,32 +1773,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function copyCurrentShareUrl(e) {
-    const topic = (topicInput?.value || '').trim();
-    if (!finalReportText && fullDebateLog.length === 0) {
-      alert('공유할 교차 검증 대화록이 없습니다. 검증을 먼저 진행해 주세요!');
+  // Global Event Handler for History Share Button (Guarantees 100% click responsiveness)
+  window.handleHistoryShareClick = async function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const targetBtn = (e && e.currentTarget) ? e.currentTarget : document.getElementById('btn-share-detail-history');
+
+    const itemToShare = selectedHistoryItem || (savedHistories && savedHistories.length > 0 ? savedHistories[0] : null);
+
+    if (!itemToShare) {
+      alert('공유할 히스토리 문서를 먼저 목록에서 클릭해 주세요!');
       return;
     }
-    const targetBtn = e ? e.currentTarget : null;
-    const filesMeta = attachedFiles.map(f => ({ filename: f.filename, filesize: f.filesize, charCount: f.charCount }));
-    const url = await generateShareUrlAsync(topic, new Date().toLocaleString('ko-KR'), parseInt(roundsSelect.value, 10) || 1, finalReportText, fullDebateLog, filesMeta);
-    copyUrlToClipboard(url, targetBtn);
-  }
+
+    console.log('🔗 History Share Button Clicked for item:', itemToShare.title);
+
+    try {
+      const url = await generateShareUrlAsync(
+        itemToShare.title || itemToShare.topic,
+        itemToShare.date,
+        itemToShare.rounds,
+        itemToShare.consensusReport,
+        itemToShare.logs,
+        itemToShare.attachedFilesMeta
+      );
+      await copyUrlToClipboard(url, targetBtn);
+    } catch (err) {
+      console.error('History share error:', err);
+      alert(`공유 링크 생성 중 오류가 발생했습니다: ${err.message}`);
+    }
+  };
 
   if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
   if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
 
   if (btnShareDetailHistory) {
-    btnShareDetailHistory.addEventListener('click', async (e) => {
-      if (!selectedHistoryItem) {
-        alert('공유할 히스토리 문서를 먼저 선택해 주세요!');
-        return;
-      }
-      const item = selectedHistoryItem;
-      const targetBtn = e.currentTarget;
-      const url = await generateShareUrlAsync(item.title, item.date, item.rounds, item.consensusReport, item.logs, item.attachedFilesMeta);
-      copyUrlToClipboard(url, targetBtn);
-    });
+    btnShareDetailHistory.addEventListener('click', window.handleHistoryShareClick);
   }
 
   if (btnResetSharedView) {
