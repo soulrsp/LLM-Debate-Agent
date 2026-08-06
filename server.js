@@ -580,6 +580,19 @@ app.get('/api/share/:shareId', (req, res) => {
   res.json({ success: true, payload: data });
 });
 
+// Firebase Security Config Proxy Endpoint
+app.get('/api/firebase-config', (req, res) => {
+  res.json({
+    apiKey: process.env.FIREBASE_API_KEY || "AIzaSyD2NhBdVelBLheEQVbsT4cObzvsMgLgtMo",
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "llm-debate-agent.firebaseapp.com",
+    projectId: process.env.FIREBASE_PROJECT_ID || "llm-debate-agent",
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "llm-debate-agent.firebasestorage.app",
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "119510377719",
+    appId: process.env.FIREBASE_APP_ID || "1:119510377719:web:2fe1a6eb61df0fef1adff2",
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID || "G-VGCSC2RZTC"
+  });
+});
+
 // Word (.docx) Document Generator Endpoint
 app.post('/api/export/docx', async (req, res) => {
   try {
