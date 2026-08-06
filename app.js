@@ -756,6 +756,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnHistoryModal) {
     btnHistoryModal.addEventListener('click', () => {
       updateHistoryUI();
+      if (!selectedHistoryItem && savedHistories && savedHistories.length > 0) {
+        selectHistoryItem(savedHistories[0]);
+      }
       if (historyModal) historyModal.classList.remove('hidden');
     });
   }
