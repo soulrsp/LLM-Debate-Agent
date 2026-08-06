@@ -1935,12 +1935,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('🔍 Shared URL param detected:', shareCode.substring(0, 30));
 
+    // Ensure Firebase Firestore DB is fully initialized before fetching
+    let dbInstance = await initFirebaseFirestoreAsync();
+    if (!dbInstance && window.firebase) {
+      // Retry once after 500ms if initial proxy call was delayed
+      await new Promise(r => setTimeout(r, 500));
+      dbInstance = firebaseDb;
+    }
+
     // Case 0: Firebase Cloud DB Short ID (f_...)
     if (shareCode.startsWith('f_')) {
       const docId = shareCode.replace('f_', '');
-      if (firebaseDb) {
+      if (dbInstance || firebaseDb) {
+        const targetDb = dbInstance || firebaseDb;
         try {
-          const docSnap = await firebaseDb.collection('shares').doc(docId).get();
+          const docSnap = await targetDb.collection('shares').doc(docId).get();
           if (docSnap.exists) {
             const cloudPayload = docSnap.data();
             console.log('🔥 100% Restored full session from Firebase Cloud DB:', docId);
