@@ -1279,6 +1279,10 @@ input[type="range"] {
   line-height: 1.65;
   color: #e2e8f0;
   white-space: pre-line;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Referee Card */
@@ -1781,11 +1785,41 @@ input[type="range"] {
 
   /* Turn Cards & Reports Mobile Layout */
   .turn-card {
-    padding: 1rem;
+    padding: 0.9rem 0.8rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .turn-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .turn-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+
+  .referee-card {
+    padding: 1.2rem 1rem;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .referee-body {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .speaker-info {
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .speaker-avatar {
@@ -1797,6 +1831,8 @@ input[type="range"] {
   .consensus-highlight-box {
     padding: 0.9rem 1rem;
     font-size: 0.9rem;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* Floating Downloads & Code Blocks Mobile Handling */
@@ -1814,5 +1850,7 @@ input[type="range"] {
     max-width: 100%;
     overflow-x: auto;
     font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 }
