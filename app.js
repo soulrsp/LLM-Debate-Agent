@@ -545,6 +545,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (historyDetailEmpty) historyDetailEmpty.classList.add('hidden');
     if (historyDetailContent) historyDetailContent.classList.remove('hidden');
 
+    if (btnShareDetailHistory) btnShareDetailHistory.disabled = false;
+    if (btnDownloadDetailDocx) btnDownloadDetailDocx.disabled = false;
+
     if (detailTitleInput) detailTitleInput.value = item.title;
     if (detailMetaText) detailMetaText.textContent = `생성 일시: ${item.date} | 총 ${item.rounds} 라운드 진행`;
     if (detailNotesArea) detailNotesArea.value = item.notes || '';
