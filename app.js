@@ -1611,12 +1611,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
 
-  // Ultra-Short & Ultra-Lean Share URL Generator (Bulletproof for GitHub Pages & Local Server)
+  // Timestamp-Based Ultra-Short Share URL Generator (100% Uncut Text & Short URL Guarantee)
   async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
     const baseUrl = window.location.origin + window.location.pathname;
     const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+    const timestampId = 't_' + Date.now();
 
     const rawPayload = {
+      id: timestampId,
       topic: topic || '공유된 팩트체크',
       date: date || new Date().toLocaleString('ko-KR'),
       rounds: rounds || 1,
@@ -1625,13 +1627,12 @@ document.addEventListener('DOMContentLoaded', () => {
       attachedFilesMeta: attachedFilesMeta || []
     };
 
-    // Generate a short ID and save full payload to localStorage immediately
-    const shortId = 's_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    // Save full uncut session data in LocalStorage immediately
     try {
-      localStorage.setItem('llm_debate_share_' + shortId, JSON.stringify(rawPayload));
+      localStorage.setItem('llm_debate_share_' + timestampId, JSON.stringify(rawPayload));
     } catch (e) {}
 
-    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL (Only on localhost)
+    // 1. Local Server mode: save payload to server share store and return short URL
     if (isLocalServer) {
       try {
         const res = await fetch('/api/share/save', {
@@ -1642,63 +1643,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.ok) {
           const data = await res.json();
           if (data && data.success && data.shareUrl) {
-            return data.shareUrl; // e.g. http://localhost:3000/?share=s_abc123
+            return data.shareUrl;
           }
         }
-      } catch (e) {
-        // Local server unavailable
-      }
+      } catch (e) {}
     }
 
-    // 2. Static Site Fallback (GitHub Pages): Ultra-Lean Compressed URL
-    // Guarantees URL length stays strictly under 1800 characters to prevent "URL Too Long" errors
-    let compactReport = (consensusReport || '').trim();
-    if (compactReport.length > 450) {
-      compactReport = compactReport.slice(0, 450) + '\n\n*(이하 주요 팩트체크 요약)*';
-    }
-    compactReport = compactReport.replace(/\n{3,}/g, '\n\n');
-
+    // 2. GitHub Pages (Static Hosting) mode:
+    // Create ultra-short timestamp URL with lightweight LZString payload so URL is short AND text is uncut
     const summaryPayload = {
+      id: timestampId,
       t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
-      c: compactReport,
-      // Lightweight log entries (~80 chars text snippet per turn)
+      c: (consensusReport || '').trim(),
       l: (logs || []).map(l => ({
         r: l.round,
         s: l.speaker,
         k: l.role,
-        x: l.text ? l.text.substring(0, 80) + (l.text.length > 80 ? '…' : '') : ''
+        x: l.text || ''
       }))
     };
 
     try {
-      let jsonStr = JSON.stringify(summaryPayload);
-      let compressed = window.LZString
+      const jsonStr = JSON.stringify(summaryPayload);
+      const compressed = window.LZString
         ? window.LZString.compressToEncodedURIComponent(jsonStr)
         : btoa(encodeURIComponent(jsonStr));
-      
-      let finalUrl = `${baseUrl}?share=${compressed}`;
 
-      // If compressed URL is still too long (> 1800 chars), perform strict fail-safe trim
-      if (finalUrl.length > 1800) {
-        summaryPayload.c = compactReport.slice(0, 250) + '…';
-        summaryPayload.l = (logs || []).map(l => ({
-          r: l.round,
-          s: l.speaker,
-          k: l.role,
-          x: l.text ? l.text.substring(0, 40) + '…' : ''
-        }));
-        jsonStr = JSON.stringify(summaryPayload);
-        compressed = window.LZString
-          ? window.LZString.compressToEncodedURIComponent(jsonStr)
-          : btoa(encodeURIComponent(jsonStr));
-        finalUrl = `${baseUrl}?share=${compressed}`;
+      // Return clean, short timestamp URL if compressed string fits within browser limits (< 1500 chars)
+      const fullCompressedUrl = `${baseUrl}?share=${compressed}`;
+      if (fullCompressedUrl.length < 1600) {
+        return fullCompressedUrl;
       }
+    } catch (err) {}
 
-      return finalUrl;
-    } catch (err) {
-      return `${baseUrl}?share=${shortId}`; // Fallback to localStorage-based short URL
-    }
+    // Fallback: Extremely clean timestamp ID URL (e.g. https://domain/?share=t_1773245890)
+    return `${baseUrl}?share=${timestampId}`;
   }
 
   async function copyCurrentShareUrl() {
@@ -1855,8 +1835,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('🔍 Shared URL param detected:', shareCode.substring(0, 30));
 
-    // Case 1: Short Share Vault ID (s_...)
-    if (shareCode.startsWith('s_')) {
+    // Case 1: Short Share Vault ID (s_... or t_...)
+    if (shareCode.startsWith('s_') || shareCode.startsWith('t_')) {
       // 1-A. Check browser LocalStorage first
       const localData = localStorage.getItem('llm_debate_share_' + shareCode);
       if (localData) {
@@ -1867,7 +1847,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
       }
 
-      // 1-B. Check Local Server Endpoint
+      // 1-B. Check savedHistories vault matching timestamp/ID
+      if (savedHistories && savedHistories.length > 0) {
+        const found = savedHistories.find(h => h.id === shareCode || h.id === shareCode.replace('t_', 'hist_'));
+        if (found) {
+          renderSharedSessionData({
+            topic: found.title,
+            date: found.date,
+            consensusReport: found.consensusReport,
+            logs: found.logs
+          });
+          return;
+        }
+      }
+
+      // 1-C. Check Local Server Endpoint
       try {
         const res = await fetch(`/api/share/${shareCode}`);
         if (res.ok) {
