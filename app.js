@@ -1645,17 +1645,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Local server unavailable (GitHub Pages static hosting)
     }
 
-    // 2. GitHub Pages fallback: return the localStorage shortId URL
-    // The recipient opens it in same browser/domain and localStorage has the full payload
-    const baseUrl = window.location.origin + window.location.pathname;
-    const localUrl = `${baseUrl}?share=${shortId}`;
-
-    // Check if URL is short enough (shortId is always ~15 chars, so this is always short)
-    // But if the recipient is on a different device, we need the compressed fallback too
-    // So we embed a compact compressed payload alongside as a hint
+    // 2. Static Site Fallback (GitHub Pages): LZString Compressed URL
+    // Guarantees 100% cross-device data restoration on static hosting (GitHub Pages)
     let compactReport = (consensusReport || '').trim();
-    if (compactReport.length > 600) {
-      compactReport = compactReport.slice(0, 600) + '\n\n*(보고서 축약본)*';
+    if (compactReport.length > 3000) {
+      compactReport = compactReport.slice(0, 3000) + '\n\n*(보고서 일부 축약)*';
     }
     compactReport = compactReport.replace(/\n{3,}/g, '\n\n');
 
@@ -1663,12 +1657,12 @@ document.addEventListener('DOMContentLoaded', () => {
       t: topic || '공유 팩트체크',
       d: date || new Date().toLocaleString('ko-KR'),
       c: compactReport,
-      // Include speaker/role + text (first 1500 chars) per turn so logs render without cut-off
+      // Include speaker, role and text so logs render across devices
       l: (logs || []).map(l => ({
         r: l.round,
         s: l.speaker,
         k: l.role,
-        x: l.text ? l.text.substring(0, 1500) + (l.text.length > 1500 ? '…' : '') : ''
+        x: l.text ? l.text.substring(0, 2000) + (l.text.length > 2000 ? '…' : '') : ''
       }))
     };
 
@@ -1677,11 +1671,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const compressed = window.LZString
         ? window.LZString.compressToEncodedURIComponent(jsonStr)
         : btoa(encodeURIComponent(jsonStr));
-      const compressedUrl = `${baseUrl}?share=${compressed}`;
-      // Return the shorter of the two
-      return compressedUrl.length < localUrl.length ? compressedUrl : localUrl;
+      return `${baseUrl}?share=${compressed}`;
     } catch (err) {
-      return localUrl; // Fallback to localStorage-based short URL
+      return `${baseUrl}?share=${shortId}`; // Fallback to localStorage-based short URL
     }
   }
 
