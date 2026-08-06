@@ -1643,7 +1643,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try { fbConfig = JSON.parse(storedFbConfig); } catch(e) {}
       }
 
-      // Fetch Firebase Config securely from server proxy if not present locally
+      // Fetch Firebase Config securely from server proxy, fallback to default config for GitHub Pages static hosting
       if (!fbConfig) {
         try {
           const res = await fetch('/api/firebase-config');
@@ -1653,12 +1653,25 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
       }
 
+      // Default Official Project Config (Ensures 100% working on GitHub Pages & Static Hosts)
+      if (!fbConfig || !fbConfig.apiKey) {
+        fbConfig = {
+          apiKey: "AIzaSyD2NhBdVelBLheEQVbsT4cObzvsMgLgtMo",
+          authDomain: "llm-debate-agent.firebaseapp.com",
+          projectId: "llm-debate-agent",
+          storageBucket: "llm-debate-agent.firebasestorage.app",
+          messagingSenderId: "119510377719",
+          appId: "1:119510377719:web:2fe1a6eb61df0fef1adff2",
+          measurementId: "G-VGCSC2RZTC"
+        };
+      }
+
       if (fbConfig && fbConfig.apiKey) {
         if (!firebase.apps.length) {
           firebase.initializeApp(fbConfig);
         }
         firebaseDb = firebase.firestore();
-        console.log('🔥 Firebase Firestore Cloud DB Initialized securely via backend proxy!');
+        console.log('🔥 Firebase Firestore Cloud DB (llm-debate-agent) Initialized successfully!');
       }
     } catch (err) {
       console.warn('Firebase Firestore initialization notice:', err.message);
