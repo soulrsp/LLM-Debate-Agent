@@ -507,12 +507,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const isSelected = selectedHistoryItem && selectedHistoryItem.id === item.id;
       const isLinked = activeReferenceSessions.some(s => s.id === item.id);
 
+      const rawTitle = item.title || '무제 검증';
+      const displayTitle = rawTitle.length > 28 ? rawTitle.substring(0, 28) + '…' : rawTitle;
+
       card.className = `history-card-item ${isSelected ? 'selected' : ''} ${isLinked ? 'linked-ref' : ''}`;
 
       card.innerHTML = `
         <div class="history-item-header">
           <div class="history-item-title-box">
-            <div class="history-item-title">${escapeHtml(item.title)} ${isLinked ? '<span class="linked-badge">📌 연계중</span>' : ''}</div>
+            <div class="history-item-title" title="${escapeHtml(rawTitle)}">${escapeHtml(displayTitle)} ${isLinked ? '<span class="linked-badge">📌 연계중</span>' : ''}</div>
             <div class="history-item-meta">📅 ${item.date} | 🔄 ${item.rounds} 라운드</div>
           </div>
           <button class="btn-card-toggle-ref ${isLinked ? 'is-linked' : ''}" title="${isLinked ? '연계 해제' : '다중 연계 추가'}">
@@ -1756,18 +1759,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         console.warn('Clipboard writeText failed, falling back to prompt:', err);
       }
-    }
-
-    if (btnElement) {
-      const origHtml = btnElement.innerHTML;
-      btnElement.innerHTML = `<span class="icon">✓</span> 복사 완료!`;
-      btnElement.style.borderColor = '#10b981';
-      btnElement.style.color = '#34d399';
-      setTimeout(() => {
-        btnElement.innerHTML = origHtml;
-        btnElement.style.borderColor = '';
-        btnElement.style.color = '';
-      }, 2500);
     }
 
     if (isSuccess) {
