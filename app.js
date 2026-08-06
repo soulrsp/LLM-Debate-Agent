@@ -1828,10 +1828,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
   if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
 
-  if (btnShareDetailHistory) {
-    btnShareDetailHistory.addEventListener('click', window.handleHistoryShareClick);
-  }
-
   if (btnResetSharedView) {
     btnResetSharedView.addEventListener('click', () => {
       window.history.pushState({}, document.title, window.location.pathname);
