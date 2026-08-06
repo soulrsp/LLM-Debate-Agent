@@ -1613,6 +1613,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Ultra-Short & Ultra-Lean Share URL Generator (Bulletproof for GitHub Pages & Local Server)
   async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+
     const rawPayload = {
       topic: topic || '공유된 팩트체크',
       date: date || new Date().toLocaleString('ko-KR'),
@@ -1628,21 +1631,23 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('llm_debate_share_' + shortId, JSON.stringify(rawPayload));
     } catch (e) {}
 
-    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL
-    try {
-      const res = await fetch('/api/share/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: rawPayload })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && data.shareUrl) {
-          return data.shareUrl; // e.g. http://localhost:3000/?share=s_abc123
+    // 1. Try Local Node Server Share Store Endpoint for 40-character Short URL (Only on localhost)
+    if (isLocalServer) {
+      try {
+        const res = await fetch('/api/share/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: rawPayload })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.shareUrl) {
+            return data.shareUrl; // e.g. http://localhost:3000/?share=s_abc123
+          }
         }
+      } catch (e) {
+        // Local server unavailable
       }
-    } catch (e) {
-      // Local server unavailable (GitHub Pages static hosting)
     }
 
     // 2. Static Site Fallback (GitHub Pages): LZString Compressed URL
