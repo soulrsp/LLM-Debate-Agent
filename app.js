@@ -1803,6 +1803,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  async function copyCurrentShareUrl(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
+    const topic = (topicInput?.value || '').trim() || '공유된 팩트체크';
+    const rounds = parseInt(roundsSelect?.value || '1', 10) || 1;
+
+    try {
+      const url = await generateShareUrlAsync(
+        topic,
+        new Date().toLocaleString('ko-KR'),
+        rounds,
+        finalReportText,
+        fullDebateLog,
+        attachedFiles.map(file => ({
+          filename: file.filename,
+          filesize: file.filesize,
+          charCount: file.charCount
+        }))
+      );
+      await copyUrlToClipboard(url, targetBtn);
+    } catch (err) {
+      console.error('Current share error:', err);
+      alert(`공유 링크 생성 중 오류가 발생했습니다: ${err.message}`);
+    }
+  }
+
   if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
   if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
 
