@@ -1632,42 +1632,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const sharedBannerDesc = document.getElementById('shared-banner-desc');
   const btnResetSharedView = document.getElementById('btn-reset-shared-view');
 
-  // Initialize Firebase Firestore Cloud DB Integration (Official Project: llm-debate-agent)
+  // Initialize Firebase Firestore Cloud DB Integration via Secure Proxy
   let firebaseDb = null;
-  function initFirebaseFirestore() {
-    if (window.firebase && !firebaseDb) {
-      try {
-        const storedFbConfig = localStorage.getItem('llm_debate_firebase_config');
-        let fbConfig = null;
-        if (storedFbConfig) {
-          try { fbConfig = JSON.parse(storedFbConfig); } catch(e) {}
-        }
-        // Official Firebase App configuration for instant 100% cross-device short sharing
-        if (!fbConfig) {
-          fbConfig = {
-            apiKey: "AIzaSyD2NhBdVelBLheEQVbsT4cObzvsMgLgtMo",
-            authDomain: "llm-debate-agent.firebaseapp.com",
-            projectId: "llm-debate-agent",
-            storageBucket: "llm-debate-agent.firebasestorage.app",
-            messagingSenderId: "119510377719",
-            appId: "1:119510377719:web:2fe1a6eb61df0fef1adff2",
-            measurementId: "G-VGCSC2RZTC"
-          };
-        }
+  async function initFirebaseFirestoreAsync() {
+    if (!window.firebase || firebaseDb) return firebaseDb;
+    try {
+      let fbConfig = null;
+      const storedFbConfig = localStorage.getItem('llm_debate_firebase_config');
+      if (storedFbConfig) {
+        try { fbConfig = JSON.parse(storedFbConfig); } catch(e) {}
+      }
+
+      // Fetch Firebase Config securely from server proxy if not present locally
+      if (!fbConfig) {
+        try {
+          const res = await fetch('/api/firebase-config');
+          if (res.ok) {
+            fbConfig = await res.json();
+          }
+        } catch (e) {}
+      }
+
+      if (fbConfig && fbConfig.apiKey) {
         if (!firebase.apps.length) {
           firebase.initializeApp(fbConfig);
         }
         firebaseDb = firebase.firestore();
-        console.log('🔥 Firebase Firestore Cloud DB (llm-debate-agent) Initialized successfully!');
-      } catch (err) {
-        console.warn('Firebase Firestore initialization notice:', err.message);
+        console.log('🔥 Firebase Firestore Cloud DB Initialized securely via backend proxy!');
       }
+    } catch (err) {
+      console.warn('Firebase Firestore initialization notice:', err.message);
     }
+    return firebaseDb;
   }
-  initFirebaseFirestore();
+  initFirebaseFirestoreAsync();
 
   // Firebase Cloud DB Ultra-Short Share URL Generator (100% Full Uncut Data Cross-Device)
   async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
+    await initFirebaseFirestoreAsync();
     const baseUrl = window.location.origin + window.location.pathname;
     const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
     const timestampId = 't_' + Date.now();
