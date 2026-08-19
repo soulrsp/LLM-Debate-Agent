@@ -1092,7 +1092,7 @@ document.addEventListener('DOMContentLoaded', () => {
       gemini: { name: 'Gemini 3.6 Flash', roleKey: 'FactFinder' },
       claude: { name: 'Claude 3.5', roleKey: 'CrossAuditor' },
       openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-      groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+      groq: { name: 'Groq (GPT OSS 120B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b' },
       nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
       openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
     }[providerKey];
@@ -1165,11 +1165,12 @@ document.addEventListener('DOMContentLoaded', () => {
       let modelsToTry = [config.model];
       if (providerKey === 'groq') {
         modelsToTry = [
-          config.model,
-          'llama-3.1-8b-instant',
-          'llama-3.3-70b-specdec',
+          'openai/gpt-oss-120b',
+          'gpt-oss-120b',
+          'qwen-3.6-27b',
           'qwen-2.5-coder-32b',
-          'deepseek-r1-distill-qwen-32b'
+          'llama-3.3-70b-specdec',
+          'llama-3.1-8b-instant'
         ];
       } else if (providerKey === 'nvidia') {
         // NVIDIA's API blocks browser direct calls (CORS) on static hosting (GitHub Pages)
@@ -1354,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { providerKey: 'gemini', modelName: 'Gemini 3.6 Flash', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
       { providerKey: 'claude', modelName: 'Claude 3.5', roleKey: 'CrossAuditor', roleLabel: '🛡️ 교차 감정 & 환각 교정', stanceClass: 'auditor' },
       { providerKey: 'openai', modelName: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer' },
-      { providerKey: 'groq', modelName: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 초고속 탐색', stanceClass: 'factfinder' },
+      { providerKey: 'groq', modelName: 'Groq (GPT OSS 120B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 120B 초고속 탐색', stanceClass: 'factfinder' },
       { providerKey: 'nvidia', modelName: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', roleLabel: '🚀 NVIDIA 심층 교차 감정', stanceClass: 'auditor' },
       { providerKey: 'openrouter', modelName: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder' }
     ];
