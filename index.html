@@ -403,7 +403,7 @@
 
         <div class="form-group">
           <div class="key-label-row">
-            <label for="groq-key">Groq API Key <span class="free-tag">⚡ 초고속 Llama 3.3 70B 상시 무료</span></label>
+            <label for="groq-key">Groq API Key <span class="free-tag">⚡ 초고속 GPT OSS 120B 상시 무료</span></label>
             <span id="groq-status" class="key-status-indicator">미연결</span>
           </div>
           <input type="password" id="groq-key" placeholder="gsk_...">
@@ -472,7 +472,16 @@
           </div>
         </details>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="key-backup-actions" style="display: flex; gap: 0.4rem;">
+          <button id="btn-export-keys" type="button" class="btn btn-outline btn-sm" title="타 PC로 이동 시 내 API 키 백업 파일 저장">
+            <span class="icon">📤</span> 키 백업 내보내기
+          </button>
+          <button id="btn-import-keys" type="button" class="btn btn-outline btn-sm" title="백업된 API 키 파일 불러오기">
+            <span class="icon">📥</span> 키 불러오기
+          </button>
+          <input type="file" id="input-import-keys-file" accept=".json" style="display: none;">
+        </div>
         <button id="btn-save-keys" class="btn btn-primary">저장 및 연결하기</button>
       </div>
     </div>
