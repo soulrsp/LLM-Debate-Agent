@@ -19,7 +19,7 @@ const PROVIDER_CONFIGS = {
   gemini: { name: 'Gemini 3.6 Flash', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
   claude: { name: 'Claude 3.5', roleKey: 'CrossAuditor', roleLabel: '🛡️ 교차 감정 & 환각 교정', stanceClass: 'auditor' },
   openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  groq: { name: 'Groq (Llama 3.3 70B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 초고속 탐색', stanceClass: 'factfinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+  groq: { name: 'Groq (GPT OSS 120B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 120B 초고속 탐색', stanceClass: 'factfinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b' },
   nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', roleLabel: '🚀 NVIDIA 심층 교차 감정', stanceClass: 'auditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
   openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
 };
@@ -170,7 +170,7 @@ async function callOpenAICompatible(baseUrl, apiKey, systemPrompt, userPrompt, m
   if (baseUrl.includes('openrouter')) {
     modelsToTry = [model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
   } else if (baseUrl.includes('groq')) {
-    modelsToTry = [model, 'llama-3.1-8b-instant', 'llama-3.3-70b-specdec', 'qwen-2.5-coder-32b', 'deepseek-r1-distill-qwen-32b'];
+    modelsToTry = ['openai/gpt-oss-120b', 'gpt-oss-120b', 'qwen-3.6-27b', 'qwen-2.5-coder-32b', 'llama-3.3-70b-specdec', 'llama-3.1-8b-instant'];
   } else if (baseUrl.includes('nvidia')) {
     modelsToTry = [model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
   }
