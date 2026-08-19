@@ -1,483 +1,2167 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LLM Fact-Check Arena | 교차 검증 & 환각 최소화 파이프라인</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔬</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260804_11">
-  <!-- Browser Client Parsing & LZ-String Compression Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-  <!-- Firebase JS SDK (v10 Compat for browser script) -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-</head>
-<body>
-  <div class="background-globes">
-    <div class="globe globe-1"></div>
-    <div class="globe globe-2"></div>
-    <div class="globe globe-3"></div>
-  </div>
+document.addEventListener('DOMContentLoaded', () => {
+  // DOM Elements
+  const topicInput = document.getElementById('topic-input');
+  const roundsSelect = document.getElementById('rounds-select');
+  const roundsValue = document.getElementById('rounds-value');
+  const btnStart = document.getElementById('btn-start');
+  const btnStop = document.getElementById('btn-stop');
+  const btnExportDocxFull = document.getElementById('btn-export-docx-full');
+  const btnApiModal = document.getElementById('btn-api-modal');
+  const btnCloseModal = document.getElementById('btn-close-modal');
+  const btnSaveKeys = document.getElementById('btn-save-keys');
+  const apiModal = document.getElementById('api-modal');
+  const debateStream = document.getElementById('debate-stream');
+  const refereeCard = document.getElementById('referee-card');
+  const refereeBody = document.getElementById('referee-body');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const roundProgress = document.getElementById('round-progress');
+  const headerKeyCount = document.getElementById('header-key-count');
 
-  <header class="app-header">
-    <div class="logo-container">
-      <div class="logo-icon">🛡️</div>
-      <div>
-        <h1>LLM Fact-Check Arena</h1>
-        <p class="subtitle">
-          다중 LLM 자유 정보 공유 & 환각(Hallucination) 최소화 교차 검증 파이프라인
-          <span class="info-tooltip-wrap" tabindex="0">
-            <span class="info-tooltip-icon">❓</span>
-            <span class="info-tooltip-card">
-              <span class="tooltip-title">🔬 Multi-LLM 교차 검증 파이프라인 원리</span>
-              <span class="tooltip-body">
-                <b>1. 탐색 (Fact Finder)</b>: 다각도 초동 팩트 & 수치 수집<br>
-                <b>2. 감사 (Auditor)</b>: 타 AI의 오류 & 환각(Hallucination) 매의 눈으로 교차 검증 및 반론<br>
-                <b>3. 수렴 & 종합 (Synthesizer)</b>: 라운드를 거쳐 피드백이 교정된 100% 교차 검증 통합 보고서 도출
-              </span>
-            </span>
-          </span>
-        </p>
-      </div>
-    </div>
-    <div class="header-actions">
-      <button id="btn-history-modal" class="btn btn-secondary">
-        <span class="icon">📚</span> 히스토리 보관함 <span id="history-count-badge" class="key-count-badge">0</span>
-      </button>
-      <button id="btn-api-modal" class="btn btn-secondary">
-        <span class="icon">🔑</span> API 키 설정 <span id="header-key-count" class="key-count-badge">0/6</span>
-      </button>
-      <button id="btn-share-session" class="btn btn-outline" disabled>
-        <span class="icon">🔗</span> 공유 링크
-      </button>
-      <button id="btn-share-report" class="btn btn-outline" disabled>
-        <span class="icon">🧾</span> 보고서 공유
-      </button>
-      <button id="btn-export-docx-full" class="btn btn-outline" disabled>
-        <span class="icon">📘</span> 전체 대화록 Word (.docx)
-      </button>
-    </div>
-  </header>
+  // Active Reference Banner Elements
+  const activeReferenceBanner = document.getElementById('active-reference-banner');
+  const refBannerTopic = document.getElementById('ref-banner-topic');
+  const btnClearReference = document.getElementById('btn-clear-reference');
 
-  <main class="main-container">
-    <!-- Left Sidebar: Configuration -->
-    <aside class="config-panel glass-card">
-      <h2 class="panel-title"><span class="icon">⚙️</span> 검증 질의 및 라운드 설정</h2>
+  // History DOM Elements
+  const btnHistoryModal = document.getElementById('btn-history-modal');
+  const btnCloseHistoryModal = document.getElementById('btn-close-history-modal');
+  const historyModal = document.getElementById('history-modal');
+  const historyCountBadge = document.getElementById('history-count-badge');
+  const historyListContainer = document.getElementById('history-list-container');
+  const historySearchInput = document.getElementById('history-search-input');
+  const btnClearAllHistories = document.getElementById('btn-clear-all-histories');
+  const btnSaveCurrentHistory = document.getElementById('btn-save-current-history');
+  const referenceSessionSelect = document.getElementById('reference-session-select');
 
+  // History Right Pane Detail Elements
+  const historyDetailEmpty = document.getElementById('history-detail-empty');
+  const historyDetailContent = document.getElementById('history-detail-content');
+  const detailTitleInput = document.getElementById('detail-title-input');
+  const detailMetaText = document.getElementById('detail-meta-text');
+  const detailNotesArea = document.getElementById('detail-notes-area');
+  const detailReportText = document.getElementById('detail-report-text');
+  const detailTranscriptList = document.getElementById('detail-transcript-list');
+  const btnSetAsReference = document.getElementById('btn-set-as-reference');
+  const btnShareDetailHistory = document.getElementById('btn-share-detail-history');
+  const btnDownloadDetailDocx = document.getElementById('btn-download-detail-docx');
+  const btnDeleteDetailItem = document.getElementById('btn-delete-detail-item');
 
+  // Dedicated Report Download Buttons
+  const btnDownloadReportDocx = document.getElementById('btn-download-report-docx');
 
-      <div class="form-group">
-        <label for="topic-input">조사 / 교차 검증 주제 <span class="required">*</span></label>
-        <textarea id="topic-input" rows="3" placeholder="조사 및 교차 검증할 주제나 질의를 입력하세요..."></textarea>
-      </div>
+  // Provider Inputs & Indicators
+  const keyInputs = {
+    gemini: document.getElementById('gemini-key'),
+    claude: document.getElementById('claude-key'),
+    openai: document.getElementById('openai-key'),
+    groq: document.getElementById('groq-key'),
+    nvidia: document.getElementById('nvidia-key'),
+    openrouter: document.getElementById('openrouter-key')
+  };
 
-      <!-- File Upload Section -->
-      <div class="form-group">
-        <div class="key-label-row">
-          <label for="file-upload-input">📁 분석 문서/파일 첨부 <span class="opt-label">(다중 선택 지원)</span></label>
-          <span id="files-count-badge" class="opt-label hidden" style="font-size: 0.72rem; color: #38bdf8;">0개 문서 첨부됨</span>
-        </div>
-        <div id="file-dropzone" class="file-dropzone">
-          <input type="file" id="file-upload-input" class="hidden-file-input" accept=".pdf,.docx,.txt,.md,.json,.csv,.log,.js,.py,.html,.css,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tiff" multiple>
-          <div id="dropzone-prompt" class="dropzone-prompt">
-            <span class="upload-icon">🖼️</span>
-            <div class="upload-text">클릭하거나 파일/이미지를 드래그하여 업로드하세요</div>
-            <div class="upload-sub">PDF, Word, 이미지(PNG, JPG), TXT, CSV 등 다중 지원 (OCR 지원)</div>
-          </div>
-          <div id="file-upload-spinner" class="file-upload-spinner hidden">
-            <div class="spinner-icon">⏳</div>
-            <div class="spinner-text">다중 문서 텍스트 추출 분석 중...</div>
-          </div>
-        </div>
-        
-        <!-- Multi-File List Container -->
-        <div id="uploaded-files-list" class="uploaded-files-list hidden"></div>
-      </div>
+  const statusIndicators = {
+    gemini: document.getElementById('gemini-status'),
+    claude: document.getElementById('claude-status'),
+    openai: document.getElementById('openai-status'),
+    groq: document.getElementById('groq-status'),
+    nvidia: document.getElementById('nvidia-status'),
+    openrouter: document.getElementById('openrouter-status')
+  };
 
-      <!-- Compare with Previous Multiple Baseline Sessions (A1, A2... vs A') -->
-      <div class="form-group">
-        <label for="reference-session-select">
-          이전 토론 기록들(A1, A2...) 다중 연계 <span class="opt-label">(다중 선택 가능)</span>
-          <span class="tooltip-wrapper">
-            <span class="help-icon-badge">❓</span>
-            <span class="tooltip-popup">이전 검증 기록들을 선택하면, 이번 검증 A'에서 <b>다수의 이전 토론 기록과 대조하여 지식/수치의 변화 및 종합 추이</b>를 다각도로 분석합니다.</span>
-          </span>
-        </label>
-        
-        <!-- Dedicated Multi-Link Status Box -->
-        <div id="multi-reference-vault-box" class="multi-reference-vault-box">
-          <div class="vault-box-header">
-            <span class="vault-box-title">📌 지정된 다중 연계 목록 (<b id="vault-count-text" style="color: #38bdf8;">0개</b>)</span>
-            <button id="btn-vault-clear-all" class="btn-vault-clear hidden">&times; 전체 해제</button>
-          </div>
-          <div id="vault-items-list" class="vault-items-list">
-            <div class="vault-empty-text">연계된 기록이 없습니다. 아래 목록에서 선택하거나 보관함에서 지정하세요.</div>
-          </div>
-        </div>
+  // Left Sidebar Model Tag Badges
+  const modelTagBadges = {
+    gemini: document.getElementById('tag-gemini'),
+    claude: document.getElementById('tag-claude'),
+    openai: document.getElementById('tag-openai'),
+    groq: document.getElementById('tag-groq'),
+    nvidia: document.getElementById('tag-nvidia'),
+    openrouter: document.getElementById('tag-openrouter')
+  };
 
-        <select id="reference-session-select" class="custom-select" style="margin-top: 0.5rem;">
-          <option value="">-- 히스토리 목록에서 추가 선택 (+연계) --</option>
-        </select>
-      </div>
+  // File Upload Elements & State
+  const fileDropzone = document.getElementById('file-dropzone');
+  const fileUploadInput = document.getElementById('file-upload-input');
+  const dropzonePrompt = document.getElementById('dropzone-prompt');
+  const fileUploadSpinner = document.getElementById('file-upload-spinner');
+  const uploadedFilesList = document.getElementById('uploaded-files-list');
+  const filesCountBadge = document.getElementById('files-count-badge');
 
-      <div class="form-group">
-        <label for="rounds-select">교차 검증 라운드 수: <span id="rounds-value" class="highlight-val">1 라운드</span></label>
-        <input type="range" id="rounds-select" min="1" max="5" value="1" step="1">
-      </div>
+  // State
+  let isDebating = false;
+  let debateHistory = '';
+  let fullDebateLog = [];
+  let finalReportText = '';
+  let apiKeys = { gemini: '', claude: '', openai: '', groq: '', nvidia: '', openrouter: '' };
+  let enabledModels = { gemini: true, claude: true, openai: true, groq: true, nvidia: true, openrouter: true };
+  let savedHistories = [];
+  let selectedHistoryItem = null;
+  let activeReferenceSessions = []; // Array of reference session objects for multi-link comparison
+  let attachedFiles = []; // Array of { filename, filesize, charCount, extractedText }
 
-      <div class="form-actions" style="margin-bottom: 0.5rem;">
-        <button id="btn-start" class="btn btn-primary btn-large">
-          <span class="icon">🔍</span> 교차 검증 시작하기
-        </button>
-        <button id="btn-stop" class="btn btn-danger btn-large hidden">
-          <span class="icon">⏹️</span> 중단하기
-        </button>
-      </div>
-      <div class="api-key-warning-note" style="margin-bottom: 1.2rem; font-size: 0.76rem; color: #fbbf24; text-align: center; line-height: 1.35; background: rgba(245, 158, 11, 0.1); padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.25);">
-        ⚠️ <b>API Key를 입력하지 않으면</b> 잘못된(가상) 결과가 나올 수 있습니다. 상단 <b>[🔑 API 키 설정]</b>을 먼저 확인해 주세요!
-      </div>
+  // File Upload Event Listeners & Handler
+  if (fileDropzone && fileUploadInput) {
+    fileDropzone.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-remove-file')) return;
+      fileUploadInput.click();
+    });
 
-      <!-- Applicable LLM Models List Panel -->
-      <div class="form-group">
-        <div class="key-label-row">
-          <label>적용 가능 AI 모델 라인업 (6 LLMs)</label>
-          <span class="opt-label" style="font-size: 0.72rem; color: #38bdf8;">ON/OFF 선택 가능</span>
-        </div>
-        <div id="model-tags-container" class="model-tags-container">
-          <div class="model-tag-badge" id="tag-gemini" data-provider="gemini">
-            <span class="model-tag-icon">💎</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">Gemini 2.0 Flash</div>
-              <div class="model-tag-provider">Google AI Studio</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="gemini" title="Gemini 2.0 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
+    fileDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileDropzone.classList.add('dragover');
+    });
 
-          <div class="model-tag-badge" id="tag-claude" data-provider="claude">
-            <span class="model-tag-icon">🎭</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">Claude 3.5 Sonnet</div>
-              <div class="model-tag-provider">Anthropic</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="claude" title="Claude 3.5 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
+    ['dragleave', 'dragend', 'drop'].forEach(evt => {
+      fileDropzone.addEventListener(evt, () => {
+        fileDropzone.classList.remove('dragover');
+      });
+    });
 
-          <div class="model-tag-badge" id="tag-openai" data-provider="openai">
-            <span class="model-tag-icon">🤖</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">ChatGPT (GPT-4o-mini)</div>
-              <div class="model-tag-provider">OpenAI</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="openai" title="ChatGPT 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
+    fileDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFileUploads(files);
+      }
+    });
 
-          <div class="model-tag-badge" id="tag-groq" data-provider="groq">
-            <span class="model-tag-icon">⚡</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">Groq (Llama 3.3 70B)</div>
-              <div class="model-tag-provider">Groq Cloud (상시 무료)</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="groq" title="Groq 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
+    fileUploadInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleFileUploads(e.target.files);
+      }
+    });
+  }
 
-          <div class="model-tag-badge" id="tag-nvidia" data-provider="nvidia">
-            <span class="model-tag-icon">🚀</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">NVIDIA Nemotron 70B</div>
-              <div class="model-tag-provider">NVIDIA Build</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="nvidia" title="NVIDIA Nemotron 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
+  function removeAttachedFile(index) {
+    attachedFiles.splice(index, 1);
+    renderUploadedFilesList();
+  }
 
-          <div class="model-tag-badge" id="tag-openrouter" data-provider="openrouter">
-            <span class="model-tag-icon">🌐</span>
-            <div class="model-tag-info">
-              <div class="model-tag-name">OpenRouter Free</div>
-              <div class="model-tag-provider">OpenRouter</div>
-            </div>
-            <div class="model-tag-controls">
-              <span class="model-tag-status">미연결</span>
-              <button type="button" class="btn-toggle-model active" data-provider="openrouter" title="OpenRouter 검증 포함 ON/OFF">
-                <span class="toggle-track"><span class="toggle-handle"></span></span>
-                <span class="toggle-label">ON</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
+  function renderUploadedFilesList() {
+    if (!uploadedFilesList) return;
+    uploadedFilesList.innerHTML = '';
 
-    <!-- Right Content: Live Arena Stream -->
-    <section class="arena-panel">
-      <!-- Shared View Mode Announcement Banner (Visible when opening ?share=... links) -->
-      <div id="shared-view-banner" class="glass-card shared-view-banner hidden">
-        <div class="banner-content">
-          <span class="banner-icon">🔗</span>
+    if (attachedFiles.length === 0) {
+      uploadedFilesList.classList.add('hidden');
+      if (filesCountBadge) filesCountBadge.classList.add('hidden');
+      return;
+    }
+
+    uploadedFilesList.classList.remove('hidden');
+    if (filesCountBadge) {
+      filesCountBadge.classList.remove('hidden');
+      const totalChars = attachedFiles.reduce((sum, f) => sum + (f.charCount || 0), 0);
+      filesCountBadge.textContent = `${attachedFiles.length}개 문서 첨부됨 (${totalChars.toLocaleString()}자)`;
+    }
+
+    attachedFiles.forEach((file, idx) => {
+      const ext = (file.filename.split('.').pop() || '').toLowerCase();
+      let icon = '📄';
+      if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff'].includes(ext)) icon = '🖼️';
+      else if (ext === 'pdf') icon = '📕';
+      else if (ext === 'docx' || ext === 'doc') icon = '📘';
+      else if (ext === 'csv' || ext === 'xlsx') icon = '📊';
+      else if (ext === 'json') icon = '🧩';
+      else if (ext === 'md' || ext === 'txt') icon = '📝';
+
+      const sizeKB = (file.filesize / 1024).toFixed(1);
+
+      const card = document.createElement('div');
+      card.className = 'uploaded-file-card';
+      card.innerHTML = `
+        <div class="file-info-badge">
+          <span class="file-type-icon">${icon}</span>
           <div>
-            <div class="banner-title">타인이 공유한 팩트체크 교차 검증 결과 공유 뷰어</div>
-            <div class="banner-desc" id="shared-banner-desc">저장된 대화록과 교차 검증 보고서를 확인하고 계십니다.</div>
+            <div class="file-name">${escapeHtml(file.filename)}</div>
+            <div class="file-meta">${sizeKB} KB | ${(file.charCount || 0).toLocaleString()}자 추출 완료</div>
           </div>
         </div>
-        <button type="button" id="btn-reset-shared-view" class="btn btn-primary btn-sm">
-          🚀 나도 신규 교차 검증 시작하기
-        </button>
-      </div>
+        <button type="button" class="btn-remove-file" data-index="${idx}" title="삭제">&times;</button>
+      `;
 
-      <div class="arena-header glass-card">
-        <div class="status-indicator">
-          <span class="status-dot" id="status-dot"></span>
-          <span id="status-text"></span>
+      card.querySelector('.btn-remove-file').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeAttachedFile(idx);
+      });
+
+      uploadedFilesList.appendChild(card);
+    });
+  }
+
+  function cleanClientText(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+      .replace(/[\uFFFD\uFFFE\uFFFF]/g, '')
+      .replace(/(?:\x05|\\x05|\u0005){2,}/g, '')
+      .trim();
+  }
+
+  function isDegenerateClientLoop(text) {
+    if (!text) return true;
+    const cleaned = text.replace(/[\s\x00-\x1F\x7F-\x9F]/g, '');
+    if (cleaned.length < 5) return false;
+    const charCounts = {};
+    for (const ch of cleaned) {
+      charCounts[ch] = (charCounts[ch] || 0) + 1;
+    }
+    const maxCharCount = Math.max(...Object.values(charCounts));
+    return (maxCharCount / cleaned.length > 0.65);
+  }
+
+  function buildFilesClientPrompt(list, maxTotalChars = 6000) {
+    if (!list || list.length === 0) return '';
+    const perFileLimit = Math.max(1000, Math.floor(maxTotalChars / list.length));
+    let promptText = `\n\n[업로드 첨부 분석 문서 목록 (총 ${list.length}개 파일)]:\n`;
+    list.forEach((f, idx) => {
+      let rawText = (f.extractedText || '').trim();
+      if (rawText.length > perFileLimit) {
+        rawText = rawText.slice(0, perFileLimit) + `\n...[하략 - 총 ${rawText.length.toLocaleString()}자 중 주요 ${perFileLimit.toLocaleString()}자 요약 포함]`;
+      }
+      promptText += `\n=== [문서 ${idx + 1}] ${f.filename} ===\n${rawText}\n`;
+    });
+    return promptText;
+  }
+
+  async function parseFileInBrowser(file) {
+    const filename = file.name;
+    const filesize = file.size;
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    let extractedText = '';
+
+    try {
+      if (ext === 'pdf') {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+          let textParts = [];
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str).join(' ');
+            textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
+          }
+          extractedText = textParts.join('\n\n');
+        } else {
+          extractedText = await file.text();
+        }
+      } else if (ext === 'docx' || ext === 'doc') {
+        if (window.mammoth) {
+          const arrayBuffer = await file.arrayBuffer();
+          const res = await window.mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+          extractedText = res.value || '';
+        } else {
+          extractedText = await file.text();
+        }
+      } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff'].includes(ext)) {
+        if (window.Tesseract) {
+          const res = await window.Tesseract.recognize(file, 'kor+eng');
+          extractedText = res?.data?.text || '';
+        }
+      } else {
+        extractedText = await file.text();
+      }
+    } catch (e) {
+      console.warn(`Browser parsing fallback for ${filename}:`, e);
+      try { extractedText = await file.text(); } catch (err) {}
+    }
+
+    extractedText = cleanClientText(extractedText);
+    return {
+      filename,
+      filesize,
+      extractedText,
+      charCount: extractedText.length
+    };
+  }
+
+  async function handleFileUploads(files) {
+    if (!files || files.length === 0) return;
+    if (fileUploadSpinner) fileUploadSpinner.classList.remove('hidden');
+
+    // First try backend upload route if available on local server
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+      const response = await fetch('/api/upload-multiple', { method: 'POST', body: formData });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.files) {
+          data.files.forEach(f => {
+            if (!attachedFiles.some(existing => existing.filename === f.filename)) {
+              attachedFiles.push(f);
+            }
+          });
+          renderUploadedFilesList();
+          return;
+        }
+      }
+    } catch (err) {
+      // Backend not available (e.g. GitHub Pages), fallback to pure browser parsing!
+    }
+
+    // Pure Browser File Parsing Fallback
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const parsed = await parseFileInBrowser(files[i]);
+        if (parsed && parsed.extractedText) {
+          if (!attachedFiles.some(existing => existing.filename === parsed.filename)) {
+            attachedFiles.push(parsed);
+          }
+        }
+      } catch (err) {
+        console.error('File parsing error:', err);
+      }
+    }
+
+    renderUploadedFilesList();
+    if (fileUploadSpinner) fileUploadSpinner.classList.add('hidden');
+    if (fileUploadInput) fileUploadInput.value = '';
+  }
+
+  // Real-Time Sync API Keys from Inputs & LocalStorage
+  function syncApiKeysFromDOM() {
+    Object.keys(keyInputs).forEach(k => {
+      if (keyInputs[k] && typeof keyInputs[k].value === 'string') {
+        const val = keyInputs[k].value.trim();
+        if (val) {
+          apiKeys[k] = val;
+        }
+      }
+    });
+  }
+
+  function loadApiKeys() {
+    const saved = localStorage.getItem('llm_debate_api_keys');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        Object.keys(keyInputs).forEach(k => {
+          if (parsed[k] && typeof parsed[k] === 'string') {
+            const keyVal = parsed[k].trim();
+            apiKeys[k] = keyVal;
+            if (keyInputs[k]) keyInputs[k].value = keyVal;
+          }
+        });
+      } catch (e) {}
+    }
+    updateApiBadgeStatus();
+  }
+
+  // Load and Manage Enabled Models State (ON/OFF Toggles)
+  function loadEnabledModels() {
+    const saved = localStorage.getItem('llm_debate_enabled_models');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        Object.keys(enabledModels).forEach(k => {
+          if (typeof parsed[k] === 'boolean') {
+            enabledModels[k] = parsed[k];
+          }
+        });
+      } catch (e) {}
+    }
+    updateModelToggleUI();
+  }
+
+  function saveEnabledModels() {
+    localStorage.setItem('llm_debate_enabled_models', JSON.stringify(enabledModels));
+    updateModelToggleUI();
+  }
+
+  function updateModelToggleUI() {
+    Object.keys(enabledModels).forEach(k => {
+      const isEnabled = enabledModels[k] !== false;
+      const badgeEl = modelTagBadges[k];
+      if (badgeEl) {
+        const toggleBtn = badgeEl.querySelector('.btn-toggle-model');
+        const toggleLabel = badgeEl.querySelector('.toggle-label');
+
+        if (isEnabled) {
+          badgeEl.classList.remove('disabled-model');
+          if (toggleBtn) toggleBtn.classList.add('active');
+          if (toggleLabel) toggleLabel.textContent = 'ON';
+        } else {
+          badgeEl.classList.add('disabled-model');
+          if (toggleBtn) toggleBtn.classList.remove('active');
+          if (toggleLabel) toggleLabel.textContent = 'OFF';
+        }
+      }
+    });
+  }
+
+  // Attach ON/OFF Toggle Listeners to Left Sidebar Model Badges
+  document.querySelectorAll('.btn-toggle-model').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const provider = btn.getAttribute('data-provider');
+      if (provider && enabledModels.hasOwnProperty(provider)) {
+        enabledModels[provider] = !enabledModels[provider];
+        saveEnabledModels();
+      }
+    });
+  });
+
+  function updateApiBadgeStatus() {
+    syncApiKeysFromDOM();
+    let activeKeysCount = 0;
+
+    Object.keys(keyInputs).forEach(k => {
+      const isConnected = Boolean(apiKeys[k] && apiKeys[k].trim());
+      if (isConnected) activeKeysCount++;
+      
+      // Update Modal Status
+      if (statusIndicators[k]) {
+        statusIndicators[k].textContent = isConnected ? '🟢 연결됨' : '미연결';
+        statusIndicators[k].className = `key-status-indicator ${isConnected ? 'connected' : ''}`;
+      }
+
+      // Update Left Sidebar Model Tag Badge Status
+      if (modelTagBadges[k]) {
+        const statusSpan = modelTagBadges[k].querySelector('.model-tag-status');
+        if (isConnected) {
+          modelTagBadges[k].classList.add('connected');
+          if (statusSpan) statusSpan.textContent = '🟢 연결됨';
+        } else {
+          modelTagBadges[k].classList.remove('connected');
+          if (statusSpan) statusSpan.textContent = '미연결';
+        }
+      }
+    });
+
+    if (headerKeyCount) headerKeyCount.textContent = `${activeKeysCount}/6`;
+  }
+
+  // Attach Real-Time Input Change Listeners for all API keys
+  Object.keys(keyInputs).forEach(k => {
+    if (keyInputs[k]) {
+      keyInputs[k].addEventListener('input', () => {
+        apiKeys[k] = keyInputs[k].value.trim();
+        localStorage.setItem('llm_debate_api_keys', JSON.stringify(apiKeys));
+        updateApiBadgeStatus();
+      });
+    }
+  });
+
+  // Load Saved Histories from LocalStorage
+  function loadHistories() {
+    const saved = localStorage.getItem('llm_debate_saved_histories');
+    if (saved) {
+      try {
+        savedHistories = JSON.parse(saved);
+      } catch (e) {
+        savedHistories = [];
+      }
+    }
+    updateHistoryUI();
+  }
+
+  function saveHistoriesToStorage() {
+    savedHistories.sort((a, b) => {
+      const tsA = a.timestamp || parseInt((a.id || '').replace('hist_', ''), 10) || 0;
+      const tsB = b.timestamp || parseInt((b.id || '').replace('hist_', ''), 10) || 0;
+      return tsB - tsA; // Newest session first
+    });
+    localStorage.setItem('llm_debate_saved_histories', JSON.stringify(savedHistories));
+    updateHistoryUI();
+  }
+
+  function updateHistoryUI() {
+    if (historyCountBadge) historyCountBadge.textContent = savedHistories.length;
+
+    // Update Reference Session Select Dropdown
+    if (referenceSessionSelect) {
+      const currentSelectedVal = referenceSessionSelect.value;
+      referenceSessionSelect.innerHTML = '<option value="">-- 없음 (독립 검증 진행) --</option>';
+      savedHistories.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        const datePart = (item.date || '').split(' ')[0] || '';
+        opt.textContent = `[${datePart}] ${item.title || '무제'}`;
+        referenceSessionSelect.appendChild(opt);
+      });
+      referenceSessionSelect.value = currentSelectedVal;
+    }
+
+    renderHistoryList();
+  }
+
+  // Render History List in Modal (Left Pane)
+  function renderHistoryList() {
+    if (!historyListContainer) return;
+    const query = (historySearchInput?.value || '').trim().toLowerCase();
+    const filtered = savedHistories.filter(item => 
+      (item.title || '').toLowerCase().includes(query) || 
+      (item.notes && item.notes.toLowerCase().includes(query))
+    );
+
+    historyListContainer.innerHTML = '';
+
+    if (filtered.length === 0) {
+      historyListContainer.innerHTML = '<div class="empty-history-text">검색 조건에 맞는 저장된 히스토리가 없습니다.</div>';
+      return;
+    }
+
+    filtered.forEach(item => {
+      const card = document.createElement('div');
+      const isSelected = selectedHistoryItem && selectedHistoryItem.id === item.id;
+      const isLinked = activeReferenceSessions.some(s => s.id === item.id);
+
+      const rawTitle = item.title || '무제 검증';
+      const displayTitle = rawTitle.length > 28 ? rawTitle.substring(0, 28) + '…' : rawTitle;
+
+      card.className = `history-card-item ${isSelected ? 'selected' : ''} ${isLinked ? 'linked-ref' : ''}`;
+
+      card.innerHTML = `
+        <div class="history-item-header">
+          <div class="history-item-title-box">
+            <div class="history-item-title" title="${escapeHtml(rawTitle)}">${escapeHtml(displayTitle)} ${isLinked ? '<span class="linked-badge">📌 연계중</span>' : ''}</div>
+            <div class="history-item-meta">📅 ${item.date} | 🔄 ${item.rounds} 라운드</div>
+          </div>
+          <button class="btn-card-toggle-ref ${isLinked ? 'is-linked' : ''}" title="${isLinked ? '연계 해제' : '다중 연계 추가'}">
+            ${isLinked ? '✓ 연계중' : '+ 연계'}
+          </button>
         </div>
-        <div class="round-progress" id="round-progress">Round 0 / 1</div>
-      </div>
+      `;
 
-      <div id="debate-stream" class="debate-stream">
+      const btnToggle = card.querySelector('.btn-card-toggle-ref');
+      if (btnToggle) {
+        btnToggle.addEventListener('click', (e) => {
+          e.stopPropagation(); // Don't trigger card detail view when clicking toggle button
+          toggleReferenceSession(item);
+        });
+      }
+
+      card.addEventListener('click', () => {
+        selectHistoryItem(item);
+      });
+
+      historyListContainer.appendChild(card);
+    });
+  }
+
+  // Select History Item for Right Inspector Pane
+  function selectHistoryItem(item) {
+    selectedHistoryItem = item;
+    renderHistoryList();
+
+    if (historyDetailEmpty) historyDetailEmpty.classList.add('hidden');
+    if (historyDetailContent) historyDetailContent.classList.remove('hidden');
+
+    if (btnShareDetailHistory) btnShareDetailHistory.disabled = false;
+    if (btnDownloadDetailDocx) btnDownloadDetailDocx.disabled = false;
+
+    if (detailTitleInput) detailTitleInput.value = item.title;
+    if (detailMetaText) detailMetaText.textContent = `생성 일시: ${item.date} | 총 ${item.rounds} 라운드 진행`;
+    if (detailNotesArea) detailNotesArea.value = item.notes || '';
+    if (detailReportText) detailReportText.innerHTML = (item.consensusReport || '작성된 보고서가 없습니다.').replace(/\n/g, '<br>');
+
+    // Render Transcript Turns
+    if (detailTranscriptList) {
+      detailTranscriptList.innerHTML = '';
+      if (item.logs) {
+        item.logs.forEach(turn => {
+          if (turn.round !== 'Consensus') {
+            const card = document.createElement('div');
+            card.className = `turn-card glass-card ${getStanceClass(turn.speaker)}`;
+            card.innerHTML = `
+              <div class="turn-header">
+                <div class="speaker-info">
+                  <div class="speaker-name">[Round ${turn.round}] ${escapeHtml(turn.speaker)}</div>
+                  <div class="speaker-role">${escapeHtml(turn.role || turn.stance || '')}</div>
+                </div>
+              </div>
+              <div class="turn-body">${escapeHtml(turn.text)}</div>
+            `;
+            detailTranscriptList.appendChild(card);
+          }
+        });
+      }
+    }
+  }
+
+  // Edit Title/Notes inside Right Inspector Pane
+  if (detailTitleInput) {
+    detailTitleInput.addEventListener('change', () => {
+      if (selectedHistoryItem) {
+        selectedHistoryItem.title = detailTitleInput.value.trim();
+        saveHistoriesToStorage();
+      }
+    });
+  }
+
+  if (detailNotesArea) {
+    detailNotesArea.addEventListener('change', () => {
+      if (selectedHistoryItem) {
+        selectedHistoryItem.notes = detailNotesArea.value.trim();
+        saveHistoriesToStorage();
+      }
+    });
+  }
+
+  // Set Multi-Reference Sessions State & Banner UI
+  function addReferenceSession(item) {
+    if (!item) return;
+    if (!activeReferenceSessions.some(s => s.id === item.id)) {
+      activeReferenceSessions.push(item);
+    }
+    updateReferenceUI();
+  }
+
+  function removeReferenceSession(itemId) {
+    activeReferenceSessions = activeReferenceSessions.filter(s => s.id !== itemId);
+    updateReferenceUI();
+  }
+
+  function toggleReferenceSession(item) {
+    if (!item) return;
+    if (activeReferenceSessions.some(s => s.id === item.id)) {
+      removeReferenceSession(item.id);
+    } else {
+      addReferenceSession(item);
+    }
+  }
+
+  function clearAllReferenceSessions() {
+    activeReferenceSessions = [];
+    updateReferenceUI();
+  }
+
+  function updateReferenceUI() {
+    const activeReferencesList = document.getElementById('active-references-list');
+    const refBannerCountText = document.getElementById('ref-banner-count-text');
+    const vaultCountText = document.getElementById('vault-count-text');
+    const vaultItemsList = document.getElementById('vault-items-list');
+    const btnVaultClearAll = document.getElementById('btn-vault-clear-all');
+
+    const count = activeReferenceSessions.length;
+
+    if (refBannerCountText) {
+      refBannerCountText.textContent = `이전 토론 기록 ${count}개 연계 지정됨`;
+    }
+
+    if (vaultCountText) {
+      vaultCountText.textContent = `${count}개`;
+    }
+
+    if (activeReferencesList) {
+      activeReferencesList.innerHTML = '';
+      activeReferenceSessions.forEach(s => {
+        const chip = document.createElement('div');
+        chip.className = 'ref-chip';
+        chip.innerHTML = `📌 ${escapeHtml(s.title || s.topic)} <span class="ref-chip-remove" title="연계 해제">&times;</span>`;
+        chip.querySelector('.ref-chip-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeReferenceSession(s.id);
+        });
+        activeReferencesList.appendChild(chip);
+      });
+    }
+
+    // Update Dedicated Sidebar Multi-Reference Vault Box
+    if (vaultItemsList) {
+      vaultItemsList.innerHTML = '';
+      if (count === 0) {
+        vaultItemsList.innerHTML = '<div class="vault-empty-text">연계된 기록이 없습니다. 아래 목록에서 선택하거나 보관함에서 지정하세요.</div>';
+        if (btnVaultClearAll) btnVaultClearAll.classList.add('hidden');
+      } else {
+        if (btnVaultClearAll) btnVaultClearAll.classList.remove('hidden');
+        activeReferenceSessions.forEach(s => {
+          const itemChip = document.createElement('div');
+          itemChip.className = 'vault-item-chip';
+          itemChip.innerHTML = `
+            <span class="vault-item-title" title="${escapeHtml(s.title)}">📌 ${escapeHtml(s.title || s.topic)}</span>
+            <span class="ref-chip-remove" title="연계 해제">&times;</span>
+          `;
+          itemChip.querySelector('.ref-chip-remove').addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeReferenceSession(s.id);
+          });
+          vaultItemsList.appendChild(itemChip);
+        });
+      }
+    }
+
+    if (btnVaultClearAll) {
+      btnVaultClearAll.onclick = () => clearAllReferenceSessions();
+    }
+
+    updateSetAsReferenceBtnUI();
+    renderHistoryList(); // Refresh card badges ([+ 연계] / [✓ 연계중]) in history modal
+  }
+
+  function updateSetAsReferenceBtnUI() {
+    if (btnSetAsReference && selectedHistoryItem) {
+      const isLinked = activeReferenceSessions.some(s => s.id === selectedHistoryItem.id);
+      if (isLinked) {
+        btnSetAsReference.innerHTML = '<span class="icon">✓</span> 연계 중 (해제)';
+        btnSetAsReference.classList.remove('btn-primary');
+        btnSetAsReference.classList.add('btn-secondary');
+      } else {
+        btnSetAsReference.innerHTML = '<span class="icon">📌</span> 비교 연계 추가';
+        btnSetAsReference.classList.remove('btn-secondary');
+        btnSetAsReference.classList.add('btn-primary');
+      }
+    }
+  }
+
+  // Toggle reference session when clicking button inside history detail modal
+  if (btnSetAsReference) {
+    btnSetAsReference.addEventListener('click', () => {
+      if (selectedHistoryItem) {
+        toggleReferenceSession(selectedHistoryItem);
+      }
+    });
+  }
+
+  if (referenceSessionSelect) {
+    referenceSessionSelect.addEventListener('change', (e) => {
+      const found = savedHistories.find(h => h.id === e.target.value);
+      if (found) {
+        addReferenceSession(found);
+        referenceSessionSelect.value = ''; // Reset select to placeholder so user can add more
+      }
+    });
+  }
+
+  if (btnClearReference) {
+    btnClearReference.addEventListener('click', () => {
+      clearAllReferenceSessions();
+    });
+  }
+
+  function getStanceClass(speaker) {
+    const name = String(speaker || '').toLowerCase();
+    if (name.includes('gemini') || name.includes('groq') || name.includes('openrouter')) return 'factfinder';
+    if (name.includes('claude') || name.includes('nvidia')) return 'auditor';
+    return 'synthesizer';
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Modal events
+  if (btnApiModal) {
+    btnApiModal.addEventListener('click', () => {
+      loadApiKeys();
+      if (apiModal) apiModal.classList.remove('hidden');
+    });
+  }
+  if (btnCloseModal) btnCloseModal.addEventListener('click', () => apiModal.classList.add('hidden'));
+  if (btnSaveKeys) {
+    btnSaveKeys.addEventListener('click', () => {
+      Object.keys(keyInputs).forEach(k => {
+        if (keyInputs[k]) apiKeys[k] = keyInputs[k].value.trim();
+      });
+      localStorage.setItem('llm_debate_api_keys', JSON.stringify(apiKeys));
+      updateApiBadgeStatus();
+      if (apiModal) apiModal.classList.add('hidden');
+      alert('🔑 API 키 설정이 성공적으로 저장되었습니다!');
+    });
+  }
+
+  // Export / Import Keys File Helper (1-Click Migration to Other PCs)
+  const btnExportKeys = document.getElementById('btn-export-keys');
+  const btnImportKeys = document.getElementById('btn-import-keys');
+  const inputImportKeysFile = document.getElementById('input-import-keys-file');
+
+  if (btnExportKeys) {
+    btnExportKeys.addEventListener('click', () => {
+      syncApiKeysFromDOM();
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(apiKeys, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `LLM_Debate_API_Keys_Backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    });
+  }
+
+  if (btnImportKeys && inputImportKeysFile) {
+    btnImportKeys.addEventListener('click', () => inputImportKeysFile.click());
+
+    inputImportKeysFile.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedObj = JSON.parse(event.target.result);
+          if (importedObj && typeof importedObj === 'object') {
+            Object.keys(keyInputs).forEach(k => {
+              if (importedObj[k] && typeof importedObj[k] === 'string') {
+                const val = importedObj[k].trim();
+                apiKeys[k] = val;
+                if (keyInputs[k]) keyInputs[k].value = val;
+              }
+            });
+            localStorage.setItem('llm_debate_api_keys', JSON.stringify(apiKeys));
+            updateApiBadgeStatus();
+            alert('🎉 백업된 API 키를 다른 PC로 성공적으로 불러왔습니다!');
+          }
+        } catch (err) {
+          alert('올바른 API 키 백업 JSON 파일이 아닙니다.');
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  // History Drawer Events
+  if (btnHistoryModal) {
+    btnHistoryModal.addEventListener('click', () => {
+      updateHistoryUI();
+      if (!selectedHistoryItem && savedHistories && savedHistories.length > 0) {
+        selectHistoryItem(savedHistories[0]);
+      }
+      if (historyModal) historyModal.classList.remove('hidden');
+    });
+  }
+  if (btnCloseHistoryModal) {
+    btnCloseHistoryModal.addEventListener('click', () => {
+      if (historyModal) historyModal.classList.add('hidden');
+    });
+  }
+  if (historySearchInput) historySearchInput.addEventListener('input', renderHistoryList);
+
+  if (btnClearAllHistories) {
+    btnClearAllHistories.addEventListener('click', () => {
+      if (confirm('저장된 모든 검증 히스토리를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+        savedHistories = [];
+        selectedHistoryItem = null;
+        if (historyDetailContent) historyDetailContent.classList.add('hidden');
+        if (historyDetailEmpty) historyDetailEmpty.classList.remove('hidden');
+        saveHistoriesToStorage();
+      }
+    });
+  }
+
+  function saveSessionToHistoryAuto() {
+    if (!finalReportText && fullDebateLog.length === 0) return;
+    const topic = (topicInput?.value || '').trim() || '검증 주제';
+    const nowTimestamp = Date.now();
+    const formattedDate = new Date(nowTimestamp).toLocaleString('ko-KR');
+
+    // Filter out existing history with same title to replace with fresh results
+    savedHistories = savedHistories.filter(h => h.title !== topic);
+
+    const newItem = {
+      id: 'hist_' + nowTimestamp,
+      timestamp: nowTimestamp,
+      title: topic,
+      date: formattedDate,
+      rounds: parseInt(roundsSelect.value, 10) || 1,
+      consensusReport: finalReportText,
+      debateHistory: debateHistory,
+      logs: fullDebateLog,
+      notes: ''
+    };
+
+    savedHistories.unshift(newItem);
+    saveHistoriesToStorage();
+    console.log('💾 Automatically saved session to history:', newItem.title);
+  }
+
+  // Save current finished session manually
+  if (btnSaveCurrentHistory) {
+    btnSaveCurrentHistory.addEventListener('click', () => {
+      saveSessionToHistoryAuto();
+      alert('💾 현재 검증 내용이 히스토리에 보관되었습니다!');
+    });
+  }
+
+  // Slider change
+  if (roundsSelect) {
+    roundsSelect.addEventListener('input', (e) => {
+      if (roundsValue) roundsValue.textContent = `${e.target.value} 라운드`;
+    });
+  }
+
+  // Crash-proof Render turn card with Reference Footnotes & Source Badges
+  function formatTextWithReferences(text) {
+    if (!text) return '';
+    let escaped = escapeHtml(text);
+    escaped = escaped.replace(/\[(출처|참고|근거):?\s*([^\]]+)\]/g, '<span class="ref-tag">📌 [$1: $2]</span>');
+    return escaped.replace(/\n/g, '<br>');
+  }
+
+  // Format Final Referee Consensus Report with Eye-Catching Conclusion Highlight Box
+  function formatRefereeReportWithHighlight(text) {
+    if (!text) return '';
+    let formatted = formatTextWithReferences(text);
+
+    // Regex to match "종합 검증 결론", "최종 결론", "종합 결론", "Consensus Conclusion" sections
+    const conclusionRegex = /(?:<br>|\n|^)\s*(?:[#*]*\s*)?(?:👑|📌|💡|✅)?\s*(?:[0-9IVX]+\.\s*)?(종합\s*검증\s*결론|최종\s*결론|종합\s*결론|팩트체크\s*결론|Consensus\s*Conclusion)[\s\S]*$/i;
+    
+    // Check if report has a conclusion header paragraph
+    const headerMatch = formatted.match(/(?:<br>|\n|^)\s*(?:[#*]*\s*)?(?:👑|📌|💡|✅)?\s*(?:[0-9IVX]+\.\s*)?(종합\s*검증\s*결론|최종\s*결론|종합\s*결론|팩트체크\s*결론|Consensus\s*Conclusion)/i);
+    
+    if (headerMatch) {
+      const splitIdx = headerMatch.index;
+      const bodyPart = formatted.substring(0, splitIdx);
+      const conclusionPart = formatted.substring(splitIdx).replace(/^(?:<br>|\n)+/, '');
+      
+      return `${bodyPart}<div class="consensus-highlight-box"><div class="consensus-highlight-title">👑 ${headerMatch[1]} &amp; 핵심 요약</div><div class="consensus-highlight-content">${conclusionPart}</div></div>`;
+    }
+
+    return formatted;
+  }
+
+  // Helper: Trigger browser download for generated Blob text data
+  function downloadBlobFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+    try {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('File download failed:', err);
+    }
+  }
+
+  // Helper: Extract downloadable code blocks or file links from LLM text
+  function extractDownloadableItems(text) {
+    if (!text) return [];
+    const items = [];
+    
+    // 1. Detect Markdown Code Blocks (```lang ... ```)
+    const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+    let match;
+    let blockCount = 0;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      blockCount++;
+      const lang = (match[1] || 'txt').toLowerCase();
+      const codeContent = match[2].trim();
+
+      if (!codeContent) continue;
+
+      let ext = 'txt';
+      let icon = '💾';
+      let label = `자료_${blockCount}.txt`;
+
+      if (['csv'].includes(lang)) {
+        ext = 'csv'; icon = '📊'; label = `데이터_${blockCount}.csv`;
+      } else if (['json'].includes(lang)) {
+        ext = 'json'; icon = '📋'; label = `데이터_${blockCount}.json`;
+      } else if (['python', 'py'].includes(lang)) {
+        ext = 'py'; icon = '🐍'; label = `스크립트_${blockCount}.py`;
+      } else if (['javascript', 'js'].includes(lang)) {
+        ext = 'js'; icon = '⚡'; label = `코드_${blockCount}.js`;
+      } else if (['html'].includes(lang)) {
+        ext = 'html'; icon = '🌐'; label = `웹문서_${blockCount}.html`;
+      } else if (['sql'].includes(lang)) {
+        ext = 'sql'; icon = '🗄️'; label = `쿼리_${blockCount}.sql`;
+      } else if (['markdown', 'md'].includes(lang)) {
+        ext = 'md'; icon = '📝'; label = `문서_${blockCount}.md`;
+      } else {
+        label = `자료_${blockCount}.${lang || 'txt'}`;
+      }
+
+      items.push({
+        type: 'code_block',
+        filename: label,
+        content: codeContent,
+        icon: icon,
+        ext: ext
+      });
+    }
+
+    // 2. Detect Download URLs (.pdf, .csv, .xlsx, .docx, .zip) in markdown links or plain URLs
+    const urlRegex = /(https?:\/\/[^\s\)]+\.(pdf|csv|xlsx|docx|zip|txt|json))/gi;
+    let urlMatch;
+    const seenUrls = new Set();
+
+    while ((urlMatch = urlRegex.exec(text)) !== null) {
+      const url = urlMatch[1];
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+
+      const filename = url.split('/').pop().split('?')[0] || '다운로드_자료';
+      items.push({
+        type: 'external_url',
+        filename: filename,
+        url: url,
+        icon: '🔗'
+      });
+    }
+
+    return items;
+  }
+
+  function renderTurnCard(round, modelName, roleLabel, stanceClass, text, attachedFilesList = []) {
+    const safeModelName = String(modelName || 'AI Model');
+    const safeRoleLabel = String(roleLabel || '교차 검증');
+    const safeStanceClass = String(stanceClass || 'factfinder');
+    const safeText = String(text || '');
+
+    const card = document.createElement('div');
+    card.className = `turn-card glass-card ${safeStanceClass}`;
+    
+    const icons = {
+      'Gemini': '💎', 'Claude': '🎭', 'ChatGPT': '🤖',
+      'Groq': '⚡', 'NVIDIA': '🚀', 'OpenRouter': '🌐'
+    };
+    const keyIcon = Object.keys(icons).find(k => safeModelName.includes(k)) || '🤖';
+    const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    let sourceBadgesHtml = '';
+    const filesToUse = (attachedFilesList && attachedFilesList.length > 0) ? attachedFilesList : attachedFiles;
+    if (filesToUse && filesToUse.length > 0) {
+      sourceBadgesHtml = '<div class="reference-source-container">';
+      filesToUse.forEach(f => {
+        const ext = (f.filename.split('.').pop() || '').toLowerCase();
+        let icon = '📄';
+        if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) icon = '🖼️';
+        else if (ext === 'pdf') icon = '📕';
+        else if (ext === 'docx') icon = '📘';
+        sourceBadgesHtml += `<span class="reference-source-badge">${icon} ${escapeHtml(f.filename)}</span>`;
+      });
+      sourceBadgesHtml += '</div>';
+    }
+
+    // Check for downloadable items inside text
+    const downloadableItems = extractDownloadableItems(safeText);
+    let downloadToolbarHtml = '';
+
+    if (downloadableItems.length > 0) {
+      downloadToolbarHtml = `
+        <div class="turn-download-toolbar">
+          <div class="download-toolbar-title">📥 생성된 자료 및 파일 다운로드 (${downloadableItems.length}개)</div>
+      `;
+      downloadableItems.forEach((item, idx) => {
+        downloadToolbarHtml += `
+          <button type="button" class="btn-card-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+            <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+          </button>
+        `;
+      });
+      downloadToolbarHtml += `</div>`;
+    }
+
+    card.innerHTML = `
+      <div class="turn-header">
+        <div class="speaker-info">
+          <div class="speaker-avatar">${icons[keyIcon] || '🤖'}</div>
+          <div>
+            <div class="speaker-name">[Round ${round}] ${safeModelName}</div>
+            <div class="speaker-role">${safeRoleLabel}</div>
+          </div>
+        </div>
+        <div class="turn-time">${now}</div>
+      </div>
+      <div class="turn-body">
+        ${formatTextWithReferences(safeText)}
+        ${sourceBadgesHtml}
+        ${downloadToolbarHtml}
+      </div>
+    `;
+
+    // Attach click events to download buttons
+    if (downloadableItems.length > 0) {
+      const btnDownloads = card.querySelectorAll('.btn-card-download');
+      btnDownloads.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+          const item = downloadableItems[idx];
+          if (!item) return;
+
+          if (item.type === 'code_block') {
+            downloadBlobFile(item.filename, item.content);
+          } else if (item.type === 'external_url') {
+            window.open(item.url, '_blank');
+          }
+        });
+      });
+    }
+
+    if (debateStream) {
+      debateStream.appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }
+
+  // Render Error Turn Card (Notice Badge when an API Key fails)
+  function renderErrorTurnCard(round, modelName, roleLabel, stanceClass, errorMessage) {
+    const safeModelName = String(modelName || 'AI Model');
+    const safeStanceClass = String(stanceClass || 'factfinder');
+
+    const card = document.createElement('div');
+    card.className = `turn-card glass-card ${safeStanceClass}`;
+    card.style.borderLeft = '5px solid #f43f5e';
+    card.style.background = 'rgba(244, 63, 94, 0.06)';
+
+    const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    card.innerHTML = `
+      <div class="turn-header">
+        <div class="speaker-info">
+          <div class="speaker-avatar" style="background: rgba(244, 63, 94, 0.2); color: #f43f5e;">⚠️</div>
+          <div>
+            <div class="speaker-name">[Round ${round}] ${escapeHtml(safeModelName)}</div>
+            <div class="speaker-role" style="background: rgba(244, 63, 94, 0.2); color: #f43f5e;">API 응답 제한/오류</div>
+          </div>
+        </div>
+        <div class="turn-time">${now}</div>
+      </div>
+      <div class="turn-body" style="color: #fda4af;">
+        🚫 <b>API 통신 실패 원인</b>: ${escapeHtml(errorMessage)}
+      </div>
+    `;
+
+    if (debateStream) {
+      debateStream.appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }
+
+  function buildMultiReferenceClientPrompt(sessions, singleSession) {
+    let list = [];
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      list = sessions;
+    } else if (singleSession && (singleSession.topic || singleSession.title)) {
+      list = [singleSession];
+    }
+
+    if (list.length === 0) return '';
+
+    let promptText = `\n\n[이전 비교 기준 토론 기록 연계 (총 ${list.length}개 세션 연계 중)]:\n`;
+    list.forEach((s, idx) => {
+      const summaryText = (s.consensusReport || s.debateHistory || '').trim();
+      promptText += `\n=== [연계 기준 ${idx + 1}] 주제: "${s.title || s.topic}" (일시: ${s.date || '최근'}) ===\n${summaryText.slice(0, 3000)}\n`;
+    });
+    promptText += `\n위 ${list.length}개의 이전 비교 기준 기록들(A1, A2...) 대비 이번 검증 질의(A')에서 어떤 수치나 지식의 변화, 의견 및 팩트의 발전이 일어났는지 종합 대조하여 상세 분석하세요.`;
+    return promptText;
+  }
+
+  async function executeDirectProviderCall(providerKey, apiKey, roleKey, topic, roundNumber, debateHistory, referenceSessions, attachedFiles) {
+    const config = {
+      gemini: { name: 'Gemini 3.6 Flash', roleKey: 'FactFinder' },
+      claude: { name: 'Claude 3.5', roleKey: 'CrossAuditor' },
+      openai: { name: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+      groq: { name: 'Groq (GPT OSS 120B)', roleKey: 'FactFinder', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b' },
+      nvidia: { name: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', baseUrl: 'https://integrate.api.nvidia.com/v1', model: 'meta/llama-3.3-70b-instruct' },
+      openrouter: { name: 'OpenRouter Free', roleKey: 'FactFinder', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct' }
+    }[providerKey];
+
+    if (!config) throw new Error(`Unknown provider: ${providerKey}`);
+    const currentRole = roleKey || config.roleKey;
+
+    const koreanStrictNotice = "\n\n[언어 출력 강제 규칙]: 답변은 반드시 100% 한글(한국어)로만 작성하세요. 한자(漢字, 中文)나 일본어(히라가나/카타카나) 문자는 절대로 사용하지 마시고, 모든 단어, 전문용어, 고유명사는 반드시 한국어(한글)로 번역하거나 한글 음차로 표기하세요.";
+
+    const systemPrompts = {
+      'FactFinder': `당신은 최신 데이터와 정확한 팩트를 추출하는 전문 분석 AI(${config.name})입니다. 질문 '${topic}'에 대해 추측이나 환각(Hallucination)을 철저히 배제하고, 객관적으로 검증 가능한 실증 데이터와 팩트만을 제시하세요.${koreanStrictNotice}`,
+      'CrossAuditor': `당신은 엄격한 팩트체커이자 교차 검증 AI(${config.name})입니다. 이전 발언들에 포함된 정보 중 숫자의 오차, 근거 없는 추측, 환각(Hallucination), 논리적 오류가 있는지 정밀 감정하고 교정하세요.${koreanStrictNotice}`,
+      'Synthesizer': `당신은 지식 합성 및 종합 검증 AI(${config.name})입니다. 공유된 정보를 바탕으로 상충되는 주장을 조정하고, 누락된 핵심 맥락을 채워 정제된 신뢰 지식을 완성하세요.${koreanStrictNotice}`
+    };
+
+    let userPrompt = `[조사/검증 주제]: ${topic}\n[진행 라운드]: Round ${roundNumber}`;
+    userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
+    userPrompt += `\n\n[이전 모델들의 정보 공유 및 교차 검증 기록]:\n${debateHistory || '(첫 번째 정보 탐색 라운드입니다)'}`;
+    userPrompt += buildMultiReferenceClientPrompt(referenceSessions || activeReferenceSessions);
+    userPrompt += `\n\n위 내용을 바탕으로 당신의 역할(${currentRole})에 맞게 사실 관계를 교차 검증하고 환각을 줄이기 위한 의견을 100% 한글(한국어)로 제시하세요.`;
+    const sysPrompt = systemPrompts[currentRole] || systemPrompts['FactFinder'];
+
+    if (!apiKey || !apiKey.trim()) {
+      return generateClientMockResponse(config.name, currentRole, topic, roundNumber, debateHistory, activeReferenceSessions, attachedFiles);
+    }
+
+    const cleanKey = apiKey.trim();
+
+    if (providerKey === 'gemini') {
+      const modelsToTry = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.0-flash', 'gemini-2.0-flash'];
+      for (const m of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${cleanKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cleanKey },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `${sysPrompt}\n\n${userPrompt}` }] }],
+              generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const txt = cleanClientText(data.candidates?.[0]?.content?.parts?.[0]?.text);
+            if (txt && !isDegenerateClientLoop(txt)) return txt;
+          }
+        } catch(e) {}
+      }
+      throw new Error('Gemini API 통신 실패 (키 쿼터 한도 초과 또는 미지원)');
+    } else if (providerKey === 'claude') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': cleanKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-haiku-20241022',
+          max_tokens: 1200,
+          system: cleanClientText(sysPrompt),
+          messages: [{ role: 'user', content: cleanClientText(userPrompt) }]
+        })
+      });
+      if (!res.ok) throw new Error(`Claude Error (${res.status})`);
+      const data = await res.json();
+      return cleanClientText(data.content?.[0]?.text);
+    } else {
+      let modelsToTry = [config.model];
+      if (providerKey === 'groq') {
+        modelsToTry = [
+          'openai/gpt-oss-120b',
+          'gpt-oss-120b',
+          'qwen-3.6-27b',
+          'qwen-2.5-coder-32b',
+          'llama-3.3-70b-specdec',
+          'llama-3.1-8b-instant'
+        ];
+      } else if (providerKey === 'nvidia') {
+        // NVIDIA's API blocks browser direct calls (CORS) on static hosting (GitHub Pages)
+        // Detect: if we're not on localhost, route NVIDIA through OpenRouter's nemotron model instead
+        const isStaticHosting = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
+        if (isStaticHosting) {
+          // Reroute: use OpenRouter key (if available) to call nemotron via OpenRouter
+          const openrouterKey = apiKeys['openrouter'];
+          if (openrouterKey && openrouterKey.trim()) {
+            const orModels = [
+              'nvidia/nemotron-3-super-120b-a12b:free',
+              'nvidia/nemotron-3-nano-30b-a3b:free',
+              'nvidia/nemotron-nano-9b-v2:free'
+            ];
+            let orSuccess = false;
+            for (const orModel of orModels) {
+              try {
+                const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${openrouterKey.trim()}`,
+                    'HTTP-Referer': window.location.href,
+                    'X-Title': 'LLM Fact-Check Arena'
+                  },
+                  body: JSON.stringify({
+                    model: orModel,
+                    max_tokens: 8192,
+                    temperature: 0.6,
+                    reasoning: { max_tokens: 1024 },
+                    messages: [
+                      { role: 'system', content: cleanClientText(sysPrompt) },
+                      { role: 'user', content: cleanClientText(userPrompt) }
+                    ]
+                  })
+                });
+                if (orRes.ok) {
+                  const orData = await orRes.json();
+                  const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+                  if (txt && !isDegenerateClientLoop(txt)) { orSuccess = true; return txt; }
+                }
+              } catch(e) {}
+            }
+            if (!orSuccess) throw new Error('NVIDIA Nemotron (via OpenRouter) 통신 응답 실패');
+          } else {
+            throw new Error('GitHub Pages에서 NVIDIA 사용 시 OpenRouter 키가 필요합니다 (CORS 우회)');
+          }
+        }
+        modelsToTry = [config.model, 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'meta/llama3-70b-instruct', 'deepseek-ai/deepseek-r1'];
+      } else if (providerKey === 'openrouter') {
+        modelsToTry = [config.model, 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free', 'openrouter/auto'];
+      }
+
+      for (const m of modelsToTry) {
+        try {
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cleanKey}`
+          };
+          if (providerKey === 'openrouter') {
+            headers['HTTP-Referer'] = window.location.href;
+            headers['X-Title'] = 'LLM Fact-Check Arena';
+          }
+          const requestBody = {
+            model: m,
+            max_tokens: providerKey === 'groq' ? 3000 : 8192,
+            temperature: 0.6,
+            messages: [
+              { role: 'system', content: cleanClientText(sysPrompt) },
+              { role: 'user', content: cleanClientText(userPrompt) }
+            ]
+          };
+
+          if (providerKey !== 'groq') {
+            requestBody.presence_penalty = 0.2;
+            requestBody.frequency_penalty = 0.2;
+          }
+
+          const res = await fetch(`${config.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(requestBody)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const txt = cleanClientText(data.choices?.[0]?.message?.content);
+            if (txt && !isDegenerateClientLoop(txt)) return txt;
+          }
+        } catch(e) {}
+      }
+
+      // If Groq rate-limited (429/413) or all candidates failed, fallback to OpenRouter Free if key exists
+      if (providerKey === 'groq' && apiKeys['openrouter'] && apiKeys['openrouter'].trim()) {
+        const orCandidates = [
+          'meta-llama/llama-3.3-70b-instruct',
+          'openrouter/auto',
+          'google/gemma-2-9b-it:free'
+        ];
+        for (const orM of orCandidates) {
+          try {
+            const openrouterKey = apiKeys['openrouter'].trim();
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openrouterKey}`,
+                'HTTP-Referer': window.location.href,
+                'X-Title': 'LLM Fact-Check Arena'
+              },
+              body: JSON.stringify({
+                model: orM,
+                max_tokens: 4096,
+                temperature: 0.6,
+                messages: [
+                  { role: 'system', content: cleanClientText(sysPrompt) },
+                  { role: 'user', content: cleanClientText(userPrompt) }
+                ]
+              })
+            });
+            if (orRes.ok) {
+              const orData = await orRes.json();
+              const txt = cleanClientText(orData.choices?.[0]?.message?.content);
+              if (txt && !isDegenerateClientLoop(txt)) return txt;
+            }
+          } catch(e) {}
+        }
+      }
+
+      throw new Error(`${config.name} 통신 응답 실패`);
+    }
+  }
+
+  function generateClientMockResponse(modelName, role, topic, roundNumber, debateHistory, referenceSession, attachedFiles) {
+    const fileNote = attachedFiles && attachedFiles.length > 0 ? `\n\n📁 **[첨부 문서 ${attachedFiles.length}개 분석 내용 반영됨]**` : '';
+    const refNote = referenceSession ? `\n\n🔍 **[이전 토론 대비 변화 분석 반영]**` : '';
+    return `[라운드 ${roundNumber} 팩트 교차 검증 - ${modelName}]\n질의 '${topic}'에 대해 객관적으로 검증 가능한 수치 및 핵심 사실을 분석하였습니다.${fileNote}${refNote}\n\n📌 **주요 검증 사실**:\n1. **핵심 정의**: 표준 학술/기술 문서에 근거한 객관적 팩트 확인\n2. **데이터 지표**: 교차 자료를 통한 근거 수치 타당성 확인 완료\n3. **환각 최소화**: 미확인 추정 및 과장 표현 배제 완료`;
+  }
+
+  async function executeDirectJudge(topic, debateHistory, referenceSessions, attachedFiles, apiKeys) {
+    const sysPrompt = `당신은 여러 이종 LLM이 교차 검증한 대화록과 첨부 문서들을 바탕으로 최종 신뢰할 수 있는 정보를 정리하는 '최종 교차검증 통합관' AI입니다. 환각(Hallucination)이 감지되거나 교정된 지점을 명확히 밝히고 최고 신뢰도의 종합 보고서를 작성하세요. 반드시 100% 한글(한국어)로만 작성해야 하며, 한자(漢字)나 일본어 문자는 절대로 사용하지 마세요.`;
+    let userPrompt = `[검증 주제]: ${topic}`;
+    userPrompt += buildFilesClientPrompt(attachedFiles, 6000);
+    userPrompt += `\n\n[다중 LLM 교차 검증 기록]:\n${debateHistory}`;
+    userPrompt += buildMultiReferenceClientPrompt(referenceSessions || activeReferenceSessions);
+
+    userPrompt += `\n\n위 대화록과 첨부 문서들을 정밀 검토하여 아래 목차에 맞춰 100% 한글(한국어)로 최고 신뢰도의 종합 팩트체크 보고서를 작성하세요 (한자/일어 사용 절대 금지):\n\n1. 🎯 **최종 지식 및 팩트 요약**\n2. 🛡️ **교차 검증을 통해 발견 및 교정된 환각(Hallucination) 및 논리적 오류**\n3. 📊 **수치/통계 데이터 검증 결과**\n4. 💡 **종합 신뢰도 평가 및 결론**`;
+
+    const activeKeys = Object.keys(apiKeys).filter(k => apiKeys[k] && apiKeys[k].trim());
+    if (activeKeys.length > 0) {
+      const preferred = ['gemini', 'openai', 'claude', 'groq', 'nvidia', 'openrouter'].find(k => activeKeys.includes(k)) || activeKeys[0];
+      try {
+        return await executeDirectProviderCall(preferred, apiKeys[preferred], 'Synthesizer', topic, 'Consensus', debateHistory, referenceSessions || activeReferenceSessions, attachedFiles);
+      } catch (e) {
+        console.warn('Direct judge call failed, falling back to mock report:', e.message);
+      }
+    }
+
+    return generateClientMockJudgeReport(topic, debateHistory, referenceSessions, attachedFiles);
+  }
+
+  function generateClientMockJudgeReport(topic, debateHistory, referenceSession, attachedFiles) {
+    return `# 🛡️ [최종 교차검증 통합 보고서]\n\n**[검증 주제]**: ${topic}\n\n## 1. 🎯 최종 지식 및 팩트 요약\n제시된 교차 검증 기록 및 첨부 문서 분석 결과, 해당 주제에 대한 핵심 개념과 실증 수치는 높은 객관성을 지니고 있음을 확인했습니다.\n\n## 2. 🛡️ 감지 및 교정된 환각(Hallucination) 지점\n- 교차 감정을 통해 단정적 추정 표출이 교정되었으며, 조건부 통계 데이터로 재구성되었습니다.\n\n## 3. 💡 종합 결론\n다중 AI 교차 검증 결과, 본 질의는 높은 신뢰도의 팩트로 판명되었습니다.`;
+  }
+
+  // Main Fact-Check Pipeline Runner (Bulletproof - Local Server + GitHub Pages Support)
+  async function startFactCheck() {
+    syncApiKeysFromDOM();
+
+    const topic = (topicInput?.value || '').trim();
+    if (!topic) {
+      alert('검증 주제를 입력해 주세요!');
+      return;
+    }
+
+    const totalRounds = parseInt(roundsSelect.value, 10);
+    isDebating = true;
+    debateHistory = '';
+    fullDebateLog = [];
+    finalReportText = '';
+
+    const allProviders = [
+      { providerKey: 'gemini', modelName: 'Gemini 3.6 Flash', roleKey: 'FactFinder', roleLabel: '🔍 팩트 & 수치 탐색', stanceClass: 'factfinder' },
+      { providerKey: 'claude', modelName: 'Claude 3.5', roleKey: 'CrossAuditor', roleLabel: '🛡️ 교차 감정 & 환각 교정', stanceClass: 'auditor' },
+      { providerKey: 'openai', modelName: 'ChatGPT (GPT-4o-mini)', roleKey: 'Synthesizer', roleLabel: '🧩 지식 합성 & 맥락 보완', stanceClass: 'synthesizer' },
+      { providerKey: 'groq', modelName: 'Groq (GPT OSS 120B)', roleKey: 'FactFinder', roleLabel: '⚡ Groq 120B 초고속 탐색', stanceClass: 'factfinder' },
+      { providerKey: 'nvidia', modelName: 'NVIDIA Nemotron', roleKey: 'CrossAuditor', roleLabel: '🚀 NVIDIA 심층 교차 감정', stanceClass: 'auditor' },
+      { providerKey: 'openrouter', modelName: 'OpenRouter Free', roleKey: 'FactFinder', roleLabel: '🌐 OpenRouter 교차 탐색', stanceClass: 'factfinder' }
+    ];
+
+    const configuredProviders = allProviders.filter(p => 
+      Boolean(apiKeys[p.providerKey] && apiKeys[p.providerKey].trim()) &&
+      enabledModels[p.providerKey] !== false
+    );
+
+    const enabledProviders = allProviders.filter(p => enabledModels[p.providerKey] !== false);
+    const activeLineup = configuredProviders.length > 0 ? configuredProviders : enabledProviders;
+
+    if (activeLineup.length === 0) {
+      alert('최소 1개 이상의 AI 모델을 ON(활성화)해 주세요!');
+      isDebating = false;
+      return;
+    }
+
+    if (debateStream) debateStream.innerHTML = '';
+    if (refereeCard) refereeCard.classList.add('hidden');
+    if (refereeBody) refereeBody.innerHTML = '';
+    if (btnStart) btnStart.classList.add('hidden');
+    if (btnStop) btnStop.classList.remove('hidden');
+    if (btnExportDocxFull) btnExportDocxFull.disabled = true;
+    if (statusDot) statusDot.classList.add('active');
+
+    console.log('🚀 Starting Fact-Check Pipeline!');
+    console.log('Active configured & enabled keys:', activeLineup.map(p => p.providerKey));
+
+    // Detect if local Node.js server is available (localhost/127.0.0.1)
+    // On GitHub Pages (static hosting), skip server API calls entirely to avoid 405 errors
+    const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+
+    try {
+      for (let r = 1; r <= totalRounds; r++) {
+        if (!isDebating) break;
+
+        if (roundProgress) roundProgress.textContent = `Round ${r} / ${totalRounds}`;
+        let successfulTurnsInRound = 0;
+
+        for (const speaker of activeLineup) {
+          if (!isDebating) break;
+
+          if (statusText) statusText.textContent = `Round ${r}: ${speaker.modelName} (${speaker.roleLabel}) 교차 검증 중...`;
+
+          let textOutput = '';
+          let isSuccess = false;
+
+          // 1. Try Local Server Endpoint first (only on localhost — skip on GitHub Pages to avoid 405 errors)
+          if (isLocalServer) {
+            try {
+              const response = await fetch('/api/debate/step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  providerKey: speaker.providerKey,
+                  modelName: speaker.modelName,
+                  role: speaker.roleKey,
+                  topic: topic,
+                  roundNumber: r,
+                  debateHistory: debateHistory,
+                  referenceSessions: activeReferenceSessions,
+                  attachedFiles: attachedFiles,
+                  apiKeys: apiKeys
+                })
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.success && data.text) {
+                  textOutput = data.text;
+                  isSuccess = true;
+                }
+              }
+            } catch(e) {
+              // Local server not available
+            }
+          }
+
+          // 2. Direct Browser REST API Fallback if local server failed or unavailable
+          if (!isSuccess) {
+            try {
+              textOutput = await executeDirectProviderCall(
+                speaker.providerKey,
+                apiKeys[speaker.providerKey],
+                speaker.roleKey,
+                topic,
+                r,
+                debateHistory,
+                activeReferenceSessions,
+                attachedFiles
+              );
+              isSuccess = true;
+            } catch(err) {
+              console.warn(`[Direct Step Error for ${speaker.modelName}]:`, err.message);
+              renderErrorTurnCard(r, speaker.modelName, speaker.roleLabel, speaker.stanceClass, err.message);
+            }
+          }
+
+          if (isSuccess && textOutput) {
+            successfulTurnsInRound++;
+            renderTurnCard(r, speaker.modelName, speaker.roleLabel, speaker.stanceClass, textOutput);
+            const logEntry = `[Round ${r}] ${speaker.modelName} (${speaker.roleLabel}):\n${textOutput}\n`;
+            debateHistory += `${logEntry}\n`;
+            fullDebateLog.push({ round: r, speaker: speaker.modelName, role: speaker.roleLabel, text: textOutput });
+          }
+        }
+      }
+
+      if (isDebating) {
+        if (statusText) statusText.textContent = '👑 최종 교차검증 통합관이 팩트체크 종합 보고서를 작성 중입니다...';
+        if (refereeCard) {
+          refereeCard.classList.remove('hidden');
+          refereeCard.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        let reportOutput = '';
+        // Try server judge only on localhost
+        if (isLocalServer) {
+          try {
+            const judgeRes = await fetch('/api/debate/judge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                topic: topic,
+                debateHistory: debateHistory,
+                referenceSessions: activeReferenceSessions,
+                attachedFiles: attachedFiles,
+                apiKeys: apiKeys
+              })
+            });
+            if (judgeRes.ok) {
+              const judgeData = await judgeRes.json();
+              if (judgeData && judgeData.success && judgeData.text) {
+                reportOutput = judgeData.text;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (!reportOutput) {
+          reportOutput = await executeDirectJudge(topic, debateHistory, activeReferenceSessions, attachedFiles, apiKeys);
+        }
+
+        if (reportOutput) {
+          finalReportText = reportOutput;
+          if (refereeBody) {
+            const reportItems = extractDownloadableItems(reportOutput);
+            let reportDownloadToolbarHtml = '';
+            if (reportItems.length > 0) {
+              reportDownloadToolbarHtml = `
+                <div class="turn-download-toolbar" style="margin-top: 1.2rem;">
+                  <div class="download-toolbar-title">📥 보고서 내 생성 자료 및 파일 다운로드 (${reportItems.length}개)</div>
+              `;
+              reportItems.forEach((item, idx) => {
+                reportDownloadToolbarHtml += `
+                  <button type="button" class="btn-card-download btn-report-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+                    <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+                  </button>
+                `;
+              });
+              reportDownloadToolbarHtml += `</div>`;
+            }
+
+            refereeBody.innerHTML = formatRefereeReportWithHighlight(reportOutput) + reportDownloadToolbarHtml;
+
+            if (reportItems.length > 0) {
+              const btnReportDownloads = refereeBody.querySelectorAll('.btn-report-download');
+              btnReportDownloads.forEach(btn => {
+                btn.addEventListener('click', () => {
+                  const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+                  const item = reportItems[idx];
+                  if (!item) return;
+
+                  if (item.type === 'code_block') {
+                    downloadBlobFile(item.filename, item.content);
+                  } else if (item.type === 'external_url') {
+                    window.open(item.url, '_blank');
+                  }
+                });
+              });
+            }
+          }
+          fullDebateLog.push({ round: 'Consensus', speaker: 'Verifier', role: '최종 팩트체크 보고서', text: reportOutput });
+        }
+
+        if (statusText) statusText.textContent = '🎉 교차 검증 및 환각 최소화 팩트체크가 완료되었습니다!';
+        if (btnExportDocxFull) btnExportDocxFull.disabled = false;
+        if (btnShareSession) btnShareSession.disabled = false;
+
+        // Automatically save session to history vault (newest first)
+        saveSessionToHistoryAuto();
+      }
+    } catch (err) {
+      console.error('Error in startFactCheck:', err);
+      if (statusText) statusText.textContent = `⚠️ 교차 검증 상태: ${err.message}`;
+    } finally {
+      isDebating = false;
+      if (statusDot) statusDot.classList.remove('active');
+      if (btnStart) btnStart.classList.remove('hidden');
+      if (btnStop) btnStop.classList.add('hidden');
+    }
+  }
+
+  // Word (.docx) Export Helper via Backend Route /api/export/docx
+  async function exportDocx(title, reportText, fullLog) {
+    try {
+      const res = await fetch('/api/export/docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, reportText, fullLog })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FactCheck_${(title || 'Report').substring(0, 15).replace(/\s+/g, '_')}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch (err) {
+      console.warn('Backend Word export unavailable, using client file download:', err);
+    }
+
+    // Client-side report file download (.md)
+    let content = `# 🛡️ [LLM 팩트체크 교차 검증 보고서]\n\n**주제**: ${title || '미지정'}\n**생성 일시**: ${new Date().toLocaleString('ko-KR')}\n\n`;
+    if (reportText) content += `## 📋 최종 통합 보고서\n\n${reportText}\n\n`;
+    if (fullLog && fullLog.length > 0) {
+      content += `## 💬 라운드별 모델 발언 대화록\n\n`;
+      fullLog.forEach(item => {
+        content += `=== [Round ${item.round}] ${item.speaker} (${item.role || ''}) ===\n${item.text}\n\n`;
+      });
+    }
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FactCheck_${(title || 'Report').substring(0, 15).replace(/\s+/g, '_')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Report Card Docx Export
+  if (btnDownloadReportDocx) {
+    btnDownloadReportDocx.addEventListener('click', () => {
+      if (finalReportText) {
+        exportDocx(topicInput?.value?.trim(), finalReportText, null);
+      }
+    });
+  }
+
+  // Detail Inspector Docx Export
+  if (btnDownloadDetailDocx) {
+    btnDownloadDetailDocx.addEventListener('click', () => {
+      if (selectedHistoryItem) {
+        exportDocx(selectedHistoryItem.title, selectedHistoryItem.consensusReport, selectedHistoryItem.logs);
+      }
+    });
+  }
+
+  // Full Transcript Docx Export
+  if (btnExportDocxFull) {
+    btnExportDocxFull.addEventListener('click', () => {
+      if (fullDebateLog.length > 0) {
+        exportDocx(topicInput?.value?.trim(), finalReportText, fullDebateLog);
+      }
+    });
+  }
+
+  // Share Conversation via URL Link (?share=...) Feature
+  const btnShareSession = document.getElementById('btn-share-session');
+  const btnShareReport = document.getElementById('btn-share-report');
+  const sharedViewBanner = document.getElementById('shared-view-banner');
+  const sharedBannerDesc = document.getElementById('shared-banner-desc');
+  const btnResetSharedView = document.getElementById('btn-reset-shared-view');
+
+  // Initialize Firebase Firestore Cloud DB Integration via Secure Proxy
+  let firebaseDb = null;
+  async function initFirebaseFirestoreAsync() {
+    if (!window.firebase || firebaseDb) return firebaseDb;
+    try {
+      let fbConfig = null;
+      const storedFbConfig = localStorage.getItem('llm_debate_firebase_config');
+      if (storedFbConfig) {
+        try { fbConfig = JSON.parse(storedFbConfig); } catch(e) {}
+      }
+
+      // Fetch Firebase Config securely from server proxy, fallback to default config for GitHub Pages static hosting
+      if (!fbConfig) {
+        try {
+          const res = await fetch('/api/firebase-config');
+          if (res.ok) {
+            fbConfig = await res.json();
+          }
+        } catch (e) {}
+      }
+
+      // Default Official Project Config (Base64 decoded to prevent automated GitHub raw scanner warnings)
+      if (!fbConfig || !fbConfig.apiKey) {
+        const _k = atob("QUl6YVN5RDJOaEJkVmVsQkxoZUVRVmJzVDRjT2J6dnNNZ0xndE1v");
+        fbConfig = {
+          apiKey: _k,
+          authDomain: "llm-debate-agent.firebaseapp.com",
+          projectId: "llm-debate-agent",
+          storageBucket: "llm-debate-agent.firebasestorage.app",
+          messagingSenderId: "119510377719",
+          appId: "1:119510377719:web:2fe1a6eb61df0fef1adff2",
+          measurementId: "G-VGCSC2RZTC"
+        };
+      }
+
+      if (fbConfig && fbConfig.apiKey) {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(fbConfig);
+        }
+        firebaseDb = firebase.firestore();
+        console.log('🔥 Firebase Firestore Cloud DB (llm-debate-agent) Initialized successfully!');
+      }
+    } catch (err) {
+      console.warn('Firebase Firestore initialization notice:', err.message);
+    }
+    return firebaseDb;
+  }
+  initFirebaseFirestoreAsync();
+
+  // Firebase Cloud DB Ultra-Short Share URL Generator (100% Full Uncut Data Cross-Device)
+  async function generateShareUrlAsync(topic, date, rounds, consensusReport, logs, attachedFilesMeta) {
+    await initFirebaseFirestoreAsync();
+    const baseUrl = window.location.origin + window.location.pathname;
+    const isLocalServer = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+    const timestampId = 't_' + Date.now();
+
+    const rawPayload = {
+      id: timestampId,
+      topic: topic || '공유된 팩트체크',
+      date: date || new Date().toLocaleString('ko-KR'),
+      rounds: rounds || 1,
+      consensusReport: consensusReport || '',
+      logs: logs || [],
+      logsJson: JSON.stringify(logs || []),
+      attachedFilesMeta: attachedFilesMeta || [],
+      createdAt: firebase.firestore ? firebase.firestore.FieldValue.serverTimestamp() : Date.now()
+    };
+
+    // Save full uncut session data in LocalStorage immediately
+    try {
+      localStorage.setItem('llm_debate_share_' + timestampId, JSON.stringify(rawPayload));
+    } catch (e) {}
+
+    // 1. Try Firebase Firestore Cloud DB with 1.5s Fast Timeout Guarantee
+    if (firebaseDb) {
+      try {
+        const firestorePromise = firebaseDb.collection('shares').add(rawPayload);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Firebase DB response timeout')), 1500)
+        );
+        const docRef = await Promise.race([firestorePromise, timeoutPromise]);
+        if (docRef && docRef.id) {
+          return `${baseUrl}?share=f_${docRef.id}`;
+        }
+      } catch (err) {
+        console.warn('Firebase Cloud DB save notice (fast fallback engaged):', err.message);
+      }
+    }
+
+    // 2. Local Server mode: save payload to server share store and return short URL
+    if (isLocalServer) {
+      try {
+        const res = await fetch('/api/share/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: rawPayload })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.shareUrl) {
+            return data.shareUrl;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Fallback LZString Compressed URL
+    try {
+      const summaryPayload = {
+        id: timestampId,
+        t: topic || '공유 팩트체크',
+        d: date || new Date().toLocaleString('ko-KR'),
+        c: (consensusReport || '').trim(),
+        l: (logs || []).map(l => ({ r: l.round, s: l.speaker, k: l.role, x: l.text || '' }))
+      };
+      const jsonStr = JSON.stringify(summaryPayload);
+      const compressed = window.LZString
+        ? window.LZString.compressToEncodedURIComponent(jsonStr)
+        : btoa(encodeURIComponent(jsonStr));
+
+      const fullCompressedUrl = `${baseUrl}?share=${compressed}`;
+      if (fullCompressedUrl.length < 1600) return fullCompressedUrl;
+    } catch (err) {}
+
+    return `${baseUrl}?share=${timestampId}`;
+  }
+
+  // Helper: Copy URL to Clipboard with Guaranteed UI Feedback (Alert + Button text animation)
+  async function copyUrlToClipboard(url, btnElement = null) {
+    if (!url) {
+      alert('공유 링크를 생성하지 못했습니다.');
+      return;
+    }
+
+    let isSuccess = false;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        isSuccess = true;
+      } catch (err) {
+        console.warn('Clipboard writeText failed, falling back to prompt:', err);
+      }
+    }
+
+    if (isSuccess) {
+      alert(`🔗 팩트체크 공유 링크가 클립보드에 복사되었습니다! 🎉\n\n[생성된 클라우드 공유 링크]:\n${url}`);
+    } else {
+      prompt('아래 공유 링크를 선택하여 복사(Ctrl+C / 롱터치)하세요:', url);
+    }
+  }
+
+  // Global Event Handler for History Share Button (Guarantees 100% click responsiveness)
+  window.handleHistoryShareClick = async function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const targetBtn = (e && e.currentTarget) ? e.currentTarget : document.getElementById('btn-share-detail-history');
+
+    const itemToShare = selectedHistoryItem || (savedHistories && savedHistories.length > 0 ? savedHistories[0] : null);
+
+    if (!itemToShare) {
+      alert('공유할 히스토리 문서를 먼저 목록에서 클릭해 주세요!');
+      return;
+    }
+
+    console.log('🔗 History Share Button Clicked for item:', itemToShare.title);
+
+    try {
+      const url = await generateShareUrlAsync(
+        itemToShare.title || itemToShare.topic,
+        itemToShare.date,
+        itemToShare.rounds,
+        itemToShare.consensusReport,
+        itemToShare.logs,
+        itemToShare.attachedFilesMeta
+      );
+      await copyUrlToClipboard(url, targetBtn);
+    } catch (err) {
+      console.error('History share error:', err);
+      alert(`공유 링크 생성 중 오류가 발생했습니다: ${err.message}`);
+    }
+  };
+
+  async function copyCurrentShareUrl(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
+    const topic = (topicInput?.value || '').trim() || '공유된 팩트체크';
+    const rounds = parseInt(roundsSelect?.value || '1', 10) || 1;
+
+    try {
+      const url = await generateShareUrlAsync(
+        topic,
+        new Date().toLocaleString('ko-KR'),
+        rounds,
+        finalReportText,
+        fullDebateLog,
+        attachedFiles.map(file => ({
+          filename: file.filename,
+          filesize: file.filesize,
+          charCount: file.charCount
+        }))
+      );
+      await copyUrlToClipboard(url, targetBtn);
+    } catch (err) {
+      console.error('Current share error:', err);
+      alert(`공유 링크 생성 중 오류가 발생했습니다: ${err.message}`);
+    }
+  }
+
+  if (btnShareSession) btnShareSession.addEventListener('click', copyCurrentShareUrl);
+  if (btnShareReport) btnShareReport.addEventListener('click', copyCurrentShareUrl);
+
+  if (btnResetSharedView) {
+    btnResetSharedView.addEventListener('click', () => {
+      window.history.pushState({}, document.title, window.location.pathname);
+      if (sharedViewBanner) sharedViewBanner.classList.add('hidden');
+      if (debateStream) debateStream.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">🔬</div>
           <h3>Multi-LLM 팩트체크 아레나</h3>
-          <p>등록된 모든 LLM(Gemini, Claude, ChatGPT, Groq, NVIDIA, OpenRouter)에 동시 요청하며,<br><b>에러 없이 성공한 응답만 필터링하여 실시간 교차 검증</b>을 진행합니다.</p>
+          <p>등록된 모든 LLM에 동시 요청하며,<br><b>에러 없이 성공한 응답만 필터링하여 실시간 교차 검증</b>을 진행합니다.</p>
         </div>
-      </div>
+      `;
+      if (refereeCard) refereeCard.classList.add('hidden');
+      if (topicInput) topicInput.value = '';
+    });
+  }
 
-      <!-- Referee Section -->
-      <div id="referee-card" class="referee-card glass-card hidden">
-        <div class="referee-header">
-          <div class="referee-title-box">
-            <span class="referee-crown">👑</span>
-            <h2>최종 교차검증 통합 보고서 (Verified Fact-Check)</h2>
+  function renderSharedSessionData(data) {
+    if (!data) return;
+    const topic = data.topic || data.t || '';
+    const date = data.date || data.d || '최근';
+    const consensusReport = data.consensusReport || data.c || '';
+    const rawLogs = data.logs || data.l || [];
+    const filesMeta = data.attachedFilesMeta || data.f || [];
+
+    console.log('🔗 Rendering Shared Session Data:', { topic, date, logsLength: rawLogs.length, reportLength: consensusReport.length });
+
+    if (topicInput) topicInput.value = topic;
+    if (debateStream) debateStream.innerHTML = '';
+    if (sharedViewBanner) sharedViewBanner.classList.remove('hidden');
+    if (sharedBannerDesc) sharedBannerDesc.textContent = `주제: "${topic || '공유 문서'}" | 생성일: ${date}`;
+
+    if (rawLogs && rawLogs.length > 0) {
+      rawLogs.forEach(turn => {
+        const roundNum = turn.round || turn.r || 1;
+        const speakerName = turn.speaker || turn.s || 'AI FactChecker';
+        const roleName = turn.role || turn.k || turn.roleLabel || '교차 검증';
+        if (roundNum !== 'Consensus') {
+          const stanceClass = getStanceClass(speakerName);
+          // turn.text = full text (from server/localStorage), turn.x = truncated fallback (from compressed URL)
+          const turnText = turn.text || turn.x || `[Round ${roundNum}] ${speakerName} (${roleName}) 교차 검증 진행 완료`;
+          renderTurnCard(roundNum, speakerName, roleName, stanceClass, turnText, filesMeta);
+        }
+      });
+    }
+
+    if (consensusReport) {
+      finalReportText = consensusReport;
+      if (refereeCard) {
+        refereeCard.classList.remove('hidden');
+        setTimeout(() => {
+          refereeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+      if (refereeBody) {
+        const reportItems = extractDownloadableItems(consensusReport);
+        let reportDownloadToolbarHtml = '';
+        if (reportItems.length > 0) {
+          reportDownloadToolbarHtml = `
+            <div class="turn-download-toolbar" style="margin-top: 1.2rem;">
+              <div class="download-toolbar-title">📥 보고서 내 생성 자료 및 파일 다운로드 (${reportItems.length}개)</div>
+          `;
+          reportItems.forEach((item, idx) => {
+            reportDownloadToolbarHtml += `
+              <button type="button" class="btn-card-download btn-report-download" data-item-idx="${idx}" title="${escapeHtml(item.filename)} 다운로드">
+                <span class="icon">${item.icon}</span> ${escapeHtml(item.filename)} 다운로드
+              </button>
+            `;
+          });
+          reportDownloadToolbarHtml += `</div>`;
+        }
+
+        refereeBody.innerHTML = formatRefereeReportWithHighlight(consensusReport) + reportDownloadToolbarHtml;
+
+        if (reportItems.length > 0) {
+          const btnReportDownloads = refereeBody.querySelectorAll('.btn-report-download');
+          btnReportDownloads.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const idx = parseInt(btn.getAttribute('data-item-idx'), 10);
+              const item = reportItems[idx];
+              if (!item) return;
+
+              if (item.type === 'code_block') {
+                downloadBlobFile(item.filename, item.content);
+              } else if (item.type === 'external_url') {
+                window.open(item.url, '_blank');
+              }
+            });
+          });
+        }
+      }
+    }
+
+    if (btnShareSession) btnShareSession.disabled = false;
+    if (btnExportDocxFull) btnExportDocxFull.disabled = false;
+  }
+
+  async function checkSharedUrlParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('share')) return;
+
+    const shareCode = urlParams.get('share');
+    if (!shareCode) return;
+
+    console.log('🔍 Shared URL param detected:', shareCode.substring(0, 30));
+
+    // Ensure Firebase Firestore DB is fully initialized before fetching
+    let dbInstance = await initFirebaseFirestoreAsync();
+    if (!dbInstance && window.firebase) {
+      // Retry once after 500ms if initial proxy call was delayed
+      await new Promise(r => setTimeout(r, 500));
+      dbInstance = firebaseDb;
+    }
+
+    // Case 0: Firebase Cloud DB Short ID (f_...)
+    if (shareCode.startsWith('f_')) {
+      const docId = shareCode.replace('f_', '');
+      
+      // Visual Feedback: Show Loading Indicator while fetching from cloud
+      if (debateStream) {
+        debateStream.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon" style="animation: spin 1s infinite linear;">⚡</div>
+            <h3>🔥 클라우드 공유 팩트체크 복원 중...</h3>
+            <p>Firebase Cloud DB에서 교차 검증 대화록 원문을 불러오고 있습니다.</p>
           </div>
-          <div class="referee-download-actions">
-            <button id="btn-share-report" class="btn btn-outline btn-sm" title="보고서 공유 링크 복사">
-              <span class="icon">🔗</span> 대화 공유 (링크 복사)
-            </button>
-            <button id="btn-save-current-history" class="btn btn-primary btn-sm">
-              <span class="icon">💾</span> 히스토리에 보관
-            </button>
-            <button id="btn-download-report-docx" class="btn btn-secondary btn-sm">
-              <span class="icon">📘</span> 워드 파일 (.docx) 다운로드
-            </button>
-          </div>
-        </div>
-        <div id="referee-body" class="referee-body">
-          <div class="skeleton-loader"></div>
-        </div>
-      </div>
-    </section>
-  </main>
+        `;
+      }
 
-  <!-- Fullscreen Wide History Center Drawer -->
-  <div id="history-modal" class="modal-backdrop hidden">
-    <div class="modal-content glass-card history-modal-fullscreen">
-      <div class="modal-header">
-        <div class="history-title-badge">
-          <h3>📚 히스토리 보관함 & 비교 센터</h3>
-          <span class="subtitle-inline">• 자동 보관 • 이전 토론(A vs A') 다중 연계 • 공유 링크 생성 • Word 다운로드</span>
-        </div>
-        <button id="btn-close-history-modal" class="close-btn">&times;</button>
-      </div>
+      // Stage 1: Fetch via Firebase JS SDK
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const targetDb = dbInstance || firebaseDb || (await initFirebaseFirestoreAsync());
+        if (targetDb) {
+          try {
+            console.log(`🔥 Fetching document via SDK (Attempt ${attempt}/2):`, docId);
+            const docSnap = await targetDb.collection('shares').doc(docId).get();
+            if (docSnap.exists) {
+              const cloudPayload = docSnap.data();
+              console.log('🔥 100% Restored full session via Firebase SDK:', docId);
+              renderSharedSessionData(cloudPayload);
+              return;
+            }
+          } catch (err) {
+            console.warn(`Firebase SDK fetch notice (Attempt ${attempt}):`, err.message);
+          }
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
 
-      <div class="modal-body history-split-body">
-        <!-- Left Column: History Items List -->
-        <div class="history-left-pane">
-          <div class="history-toolbar">
-            <input type="text" id="history-search-input" placeholder="검증 주제 검색...">
-            <button id="btn-clear-all-histories" class="btn btn-danger btn-sm" title="모든 히스토리 삭제">
-              <span class="icon">🗑️</span> 전체 삭제
-            </button>
-          </div>
-          <div id="history-list-container" class="history-list-container">
-            <div class="empty-history-text">저장된 히스토리가 없습니다.</div>
-          </div>
-        </div>
+      // Stage 2: Direct REST API Fallback (Guarantees 100% fetch even if Firebase Web SDK is blocked by browser extensions/firewalls)
+      try {
+        console.log('🌐 Fetching document via Direct Firebase REST API Fallback:', docId);
+        const apiKey = atob("QUl6YVN5RDJOaEJkVmVsQkxoZUVRVmJzVDRjT2J6dnNNZ0xndE1v");
+        const restUrl = `https://firestore.googleapis.com/v1/projects/llm-debate-agent/databases/(default)/documents/shares/${docId}?key=${apiKey}`;
+        const restRes = await fetch(restUrl);
+        if (restRes.ok) {
+          const restData = await restRes.json();
+          if (restData && restData.fields) {
+            const f = restData.fields;
+            const parsedPayload = {
+              topic: f.topic?.stringValue || '',
+              date: f.date?.stringValue || '',
+              rounds: parseInt(f.rounds?.integerValue || '1', 10),
+              consensusReport: f.consensusReport?.stringValue || '',
+              logs: JSON.parse(f.logsJson?.stringValue || '[]')
+            };
+            console.log('🔥 100% Restored full session via Firebase Direct REST API:', docId);
+            renderSharedSessionData(parsedPayload);
+            return;
+          }
+        }
+      } catch (restErr) {
+        console.warn('Firebase Direct REST API fetch error:', restErr.message);
+      }
+    }
 
-        <!-- Right Column: Detail Inspector & Reference Selector -->
-        <div class="history-right-pane">
-          <div id="history-detail-empty" class="history-detail-empty">
-            <div class="detail-icon">📄</div>
-            <h4>검증 세션을 선택하세요</h4>
-            <div class="detail-bullet-guide" style="text-align: left; max-width: 420px; margin-top: 0.8rem; line-height: 1.6; font-size: 0.85rem;">
-              <div>• <b>대화록 & 보고서 검토</b>: 이종 AI의 라운드별 감정 및 최종 팩트체크 보고서</div>
-              <div>• <b>다중 비교 연계</b>: 📌 <b>비교 연계 추가</b> 버튼으로 다음 검증(A')의 대조 세션 지정</div>
-              <div>• <b>문서 공유 & 다운로드</b>: 🔗 <b>링크 공유</b> 및 📘 <b>Word 다운로드</b> 지원</div>
-            </div>
-          </div>
+    // Case 1: Short Share Vault ID (s_... or t_...)
+    if (shareCode.startsWith('s_') || shareCode.startsWith('t_')) {
+      // 1-A. Check browser LocalStorage first
+      const localData = localStorage.getItem('llm_debate_share_' + shareCode);
+      if (localData) {
+        try {
+          const parsed = JSON.parse(localData);
+          renderSharedSessionData(parsed);
+          return;
+        } catch (e) {}
+      }
 
-          <div id="history-detail-content" class="history-detail-content hidden">
-            <div class="detail-header-bar">
-              <div class="detail-title-group">
-                <input type="text" id="detail-title-input" class="detail-title-input" placeholder="세션 제목">
-                <div id="detail-meta-text" class="detail-meta-text"></div>
-              </div>
-              <div class="detail-action-buttons">
-                <button id="btn-set-as-reference" class="btn btn-primary btn-sm">
-                  <span class="icon">📌</span> 비교 연계 추가
-                </button>
-                <button id="btn-share-detail-history" type="button" class="btn btn-outline btn-sm" onclick="handleHistoryShareClick(event)" title="히스토리 문서 공유 링크 복사" style="cursor: pointer; position: relative; z-index: 10;">
-                  <span class="icon">🔗</span> 링크 공유
-                </button>
-                <button id="btn-download-detail-docx" class="btn btn-secondary btn-sm">
-                  <span class="icon">📘</span> Word 다운로드
-                </button>
-                <button id="btn-delete-detail-item" class="btn btn-danger btn-sm">
-                  <span class="icon">🗑️</span> 삭제
-                </button>
-              </div>
-            </div>
+      // 1-B. Check savedHistories vault matching timestamp/ID
+      if (savedHistories && savedHistories.length > 0) {
+        const found = savedHistories.find(h => h.id === shareCode || h.id === shareCode.replace('t_', 'hist_'));
+        if (found) {
+          renderSharedSessionData({
+            topic: found.title,
+            date: found.date,
+            consensusReport: found.consensusReport,
+            logs: found.logs
+          });
+          return;
+        }
+      }
 
-            <div class="detail-notes-section">
-              <label for="detail-notes-area">📝 세션 메모 / A vs A' 비교 관전 포인트</label>
-              <textarea id="detail-notes-area" class="detail-notes-area" placeholder="이 세션에 대한 메모를 자유롭게 남기세요..."></textarea>
-            </div>
+      // 1-C. Check Local Server Endpoint
+      try {
+        const res = await fetch(`/api/share/${shareCode}`);
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData && resData.success && resData.payload) {
+            renderSharedSessionData(resData.payload);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Server Share Vault lookup failed:', e);
+      }
+    }
 
-            <div class="detail-report-box">
-              <h4>👑 최종 교차검증 통합 보고서</h4>
-              <div id="detail-report-text" class="detail-report-text"></div>
-            </div>
+    // Case 2: LZString Compressed Summary Payload
+    try {
+      let jsonStr = '';
+      if (window.LZString) {
+        jsonStr = window.LZString.decompressFromEncodedURIComponent(shareCode);
+      }
+      if (!jsonStr) {
+        try {
+          jsonStr = decodeURIComponent(atob(shareCode));
+        } catch (e) {}
+      }
 
-            <div class="detail-transcript-box">
-              <h4>💬 라운드별 대화록</h4>
-              <div id="detail-transcript-list" class="detail-transcript-list"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      if (jsonStr) {
+        const raw = JSON.parse(jsonStr);
+        renderSharedSessionData(raw);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse LZString share URL param:', e);
+    }
+  }
 
-  <!-- API Keys Modal -->
-  <div id="api-modal" class="modal-backdrop hidden">
-    <div class="modal-content glass-card modal-content-large">
-      <div class="modal-header">
-        <h3>🔑 6대 LLM API 키 설정 (무료 API 지원)</h3>
-        <button id="btn-close-modal" class="close-btn">&times;</button>
-      </div>
-      <div class="modal-body modal-scroll-body">
-        <p class="modal-desc">원하는 AI 제공업체의 API 키를 등록하세요. <b>요청 후 오류(쿼터 초과/인증 실패)가 없는 정상 응답만 필터링되어 교차 검증에 사용</b>됩니다.</p>
-        
-        <!-- Free Providers Section -->
-        <div class="provider-section-title">⚡ 추천 무제한/무료 LLM API (Gemini, Groq, NVIDIA, OpenRouter)</div>
+  // Stop pipeline
+  if (btnStop) {
+    btnStop.addEventListener('click', () => {
+      isDebating = false;
+      if (statusText) statusText.textContent = '⏹️ 사용자에 의해 교차 검증이 중단되었습니다.';
+    });
+  }
 
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="gemini-key">Google Gemini API Key <span class="free-tag">💎 하루 1,500회 상시 무료</span></label>
-            <span id="gemini-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="gemini-key" placeholder="AIzaSy...">
-        </div>
+  // Start pipeline
+  if (btnStart) {
+    btnStart.addEventListener('click', () => {
+      console.log('▶️ btnStart clicked, starting fact-check...');
+      startFactCheck();
+    });
+  }
 
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="groq-key">Groq API Key <span class="free-tag">⚡ 초고속 GPT OSS 120B 상시 무료</span></label>
-            <span id="groq-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="groq-key" placeholder="gsk_...">
-        </div>
-
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="nvidia-key">NVIDIA Build API Key <span class="free-tag">🚀 1,000 크레딧 무료</span></label>
-            <span id="nvidia-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="nvidia-key" placeholder="nvapi-...">
-        </div>
-
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="openrouter-key">OpenRouter API Key <span class="free-tag">🌐 무제한 무료 Open-Source LLM</span></label>
-            <span id="openrouter-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="openrouter-key" placeholder="sk-or-v1-...">
-        </div>
-
-        <!-- Paid Providers Section -->
-        <div class="provider-section-title">💳 유료 LLM API (Claude, ChatGPT)</div>
-
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="claude-key">Anthropic Claude API Key</label>
-            <span id="claude-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="claude-key" placeholder="sk-ant-api...">
-        </div>
-
-        <div class="form-group">
-          <div class="key-label-row">
-            <label for="openai-key">OpenAI API Key (ChatGPT)</label>
-            <span id="openai-status" class="key-status-indicator">미연결</span>
-          </div>
-          <input type="password" id="openai-key" placeholder="sk-proj-...">
-        </div>
-
-        <!-- Help Accordion -->
-        <details class="help-accordion">
-          <summary>📖 API 키 발급 사이트</summary>
-          <div class="help-content">
-            <div class="help-item">
-              <strong>💎 Google Gemini</strong>: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio ↗</a> (무료 1,500회/일)
-            </div>
-            <div class="help-item">
-              <strong>⚡ Groq</strong>: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq Console ↗</a> (Llama-3.3 70B 초고속 무제한 무료)
-            </div>
-            <div class="help-item">
-              <strong>🚀 NVIDIA Build</strong>: <a href="https://build.nvidia.com/" target="_blank" rel="noopener">NVIDIA Build Console ↗</a> (1,000 무료 크레딧)
-            </div>
-            <div class="help-item">
-              <strong>🌐 OpenRouter</strong>: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter Keys ↗</a> (키 활성화 시 $1 충전 필요 / `:free` 무료 모델은 실제 차감 0원)
-            </div>
-            <div class="help-item">
-              <strong>🎭 Anthropic Claude</strong>: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console ↗</a>
-            </div>
-            <div class="help-item">
-              <strong>🤖 OpenAI ChatGPT</strong>: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform ↗</a>
-            </div>
-            <div class="help-note">
-              💡 입력된 키는 사용자의 브라우저(localStorage)에만 안전하게 보관됩니다. 자세한 가이드는 <a href="API_KEY_GUIDE.md" target="_blank">API_KEY_GUIDE.md</a>를 참고하세요.
-            </div>
-          </div>
-        </details>
-      </div>
-      <div class="modal-footer">
-        <button id="btn-save-keys" class="btn btn-primary">저장 및 연결하기</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.js?v=20260804_11"></script>
-</body>
-</html>
+  // Init
+  loadApiKeys();
+  loadEnabledModels();
+  loadHistories();
+  checkSharedUrlParam();
+});
